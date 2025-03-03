@@ -1,0 +1,8 @@
+/target
+*.zip
+/test/node_modules
+Dockerfile
+docker-compose.yaml
+/test
+.gitignore
+.dockerignore

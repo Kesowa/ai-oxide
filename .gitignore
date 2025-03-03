@@ -1,0 +1,4 @@
+/target
+*.zip
+/test/node_modules
+/test2

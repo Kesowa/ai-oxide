@@ -1,0 +1,63 @@
+services:
+  minio:
+    image: minio/minio@sha256:c7175077d39a8cc10c9fd611cdcc68b6a5b365793e9ac6f4198ffff1ef0fe555
+    command: server /data --console-address ":9001"
+    expose:
+      - "9000"
+      - "9001"
+    healthcheck:
+      test: ["CMD", "curl", "-I", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    ports:
+      - 9001:9001
+      - 9000:9000
+
+  createbuckets:
+    image: minio/mc
+    volumes:
+      - ./trash.zip:/garbage.zip
+      - ./test2.zip:/test.zip
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+        /usr/bin/mc alias set myminio http://minio:9000 minioadmin minioadmin;
+        /usr/bin/mc mb myminio/aru;
+        /usr/bin/mc anonymous set public myminio/aru;
+        /usr/bin/mc put /test.zip myminio/aru;
+        /usr/bin/mc put /garbage.zip myminio/aru;
+        exit 0;
+      "
+
+  zip:
+    container_name: zip
+    image: zip:1.0.9
+    build: .
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - AWS_ACCESS_KEY_ID=minioadmin
+      - AWS_SECRET_ACCESS_KEY=minioadmin
+      - S3_BUCKET=aru
+      - S3_ENDPOINT=http://minio:9000
+      - S3_PATH_STYLE=true
+      - AMQP_ADDR=amqp://rabbitmq:5672/%2f
+      - RUST_LOG=info
+    mem_limit: 512m
+    cpus: 0.5
+
+  rabbitmq:
+    image: rabbitmq@sha256:473953b02b8346091f0b3a6819e017618cbe95cb568bca2fecf00966a20ccf2a
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "status"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    ports:
+      - 5672:5672
+    # mem_limit: 128m
+    # memswap_limit: 128m

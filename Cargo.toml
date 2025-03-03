@@ -1,0 +1,26 @@
+[package]
+name = "ai-oxide"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+path = "src/main.rs"
+name = "ai_oxide"
+
+[dependencies]
+lapin = "2.5.0"
+rc-zip-tokio = { version = "4.2.2", features = ["deflate64"] }
+rust-s3 = {version = "0.35.1", features = ["with-tokio"]}
+serde = { version = "1.0.210", features = ["derive"] }
+serde_json = "1.0.128"
+thiserror = "1.0.64"
+tokio = { version = "1.40.0", features = ["io-util", "macros", "rt-multi-thread", "time"] }
+tokio-stream = "0.1.16"
+tokio-util = { version = "0.7.12", features = ["io", "io-util"] }
+tracing = "0.1.40"
+tracing-bunyan-formatter = "0.3.9"
+tracing-log = "0.2.0"
+tracing-subscriber = { version = "0.3.18", features = ["env-filter", "registry"] }
