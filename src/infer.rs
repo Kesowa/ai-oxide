@@ -3,6 +3,7 @@ use std::error::Error;
 use image::{imageops::FilterType, DynamicImage, ImageBuffer, Rgb};
 use ndarray::Array4;
 use ort::{
+    execution_providers::CPUExecutionProvider,
     session::{builder::GraphOptimizationLevel, Session},
     value::Tensor,
 };
@@ -15,6 +16,9 @@ pub type Result<T> = std::result::Result<T, Box<dyn Error>>;
 
 impl Infer {
     pub fn new(model_path: &str) -> Result<Self> {
+        ort::init()
+            .with_execution_providers([CPUExecutionProvider::default().build()])
+            .commit()?;
         let session = Session::builder()?
             .with_optimization_level(GraphOptimizationLevel::Level3)?
             .with_intra_threads(4)?
