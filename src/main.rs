@@ -1,3 +1,9 @@
+use ai_oxide::{
+    decompress,
+    telemetry::{get_subscriber, init_subscriber},
+    utils::{create_bucket, Dir, Object, S3},
+    ZipError,
+};
 use lapin::{
     options::{
         BasicAckOptions, BasicConsumeOptions, BasicPublishOptions, BasicQosOptions,
@@ -9,12 +15,6 @@ use lapin::{
 use serde::{Deserialize, Serialize};
 use tokio_stream::StreamExt;
 use tracing::{error, info, instrument};
-use zip_decompress::{
-    decompress,
-    telemetry::{get_subscriber, init_subscriber},
-    utils::{create_bucket, Dir, Object, S3},
-    ZipError,
-};
 
 const REQ_QUEUE: &str = "file.decompress.req";
 const RES_QUEUE: &str = "file.decompress.res";
