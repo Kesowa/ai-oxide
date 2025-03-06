@@ -11,6 +11,7 @@ path = "src/main.rs"
 name = "ai_oxide"
 
 [dependencies]
+gstreamer = "0.23.5"
 image = "0.25.5"
 lapin = "2.5.0"
 ndarray = "0.16.1"
