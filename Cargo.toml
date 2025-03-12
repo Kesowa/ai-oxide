@@ -11,10 +11,13 @@ path = "src/main.rs"
 name = "ai_oxide"
 
 [dependencies]
+bytes = "1.10.1"
+cog3pio = { git = "https://github.com/weiji14/cog3pio.git", rev = "ee77d4f91d23850da55ce50dcb88c9f3ff95a0b0", version = "0.1.0" }
 gstreamer = "0.23.5"
 image = "0.25.5"
 lapin = "2.5.0"
 ndarray = "0.16.1"
+object_store = "0.12.0"
 ort = "=2.0.0-rc.9"
 rc-zip-tokio = { version = "4.2.2", features = ["deflate64"] }
 rust-s3 = { version = "0.35.1", features = ["with-tokio"] }
@@ -36,3 +39,4 @@ tracing-subscriber = { version = "0.3.18", features = [
   "env-filter",
   "registry",
 ] }
+url = "2.5.4"

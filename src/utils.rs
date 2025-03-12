@@ -5,12 +5,12 @@ use tokio_util::io::StreamReader;
 
 #[derive(Deserialize, Clone, Debug)]
 pub struct S3 {
-    bucket: String,
-    endpoint: String,
-    path_style: bool,
-    access: String,
-    secret: String,
-    region: String,
+    pub bucket: String,
+    pub endpoint: String,
+    pub path_style: bool,
+    pub access: String,
+    pub secret: String,
+    pub region: String,
 }
 
 impl S3 {

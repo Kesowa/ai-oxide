@@ -5,9 +5,11 @@ use thiserror::Error;
 use tokio::{io::AsyncReadExt, sync::Semaphore};
 use tracing::{error, info};
 
+pub mod geotiff;
 pub mod infer;
 pub mod telemetry;
 pub mod utils;
+pub mod vod;
 
 #[derive(Error, Debug)]
 pub enum ZipError {
