@@ -1,30 +1,24 @@
-use std::io::Cursor;
+use gdal::raster::RasterBand;
+use gdal::{Dataset, Metadata};
+use std::path::Path;
 
-use bytes::Bytes;
-use cog3pio::io::geotiff::read_geotiff;
-use ndarray::Array3;
-use object_store::path::Path;
-use object_store::{parse_url, GetResult, ObjectStore};
-use tokio;
-use url::Url;
+fn example() {
+    let path = Path::new("./ortho.tiff");
+    let dataset = Dataset::open(path).unwrap();
+    println!("dataset description: {:?}", dataset.description());
 
-async fn example() {
-    let cog_url: &str =
-        "https://github.com/cogeotiff/rio-tiler/raw/6.4.0/tests/fixtures/cog_nodata_nan.tif";
-    let tif_url: Url = Url::parse(cog_url).unwrap();
-    let (store, location): (Box<dyn ObjectStore>, Path) = parse_url(&tif_url).unwrap();
-
-    let stream: Cursor<Bytes> = {
-        let result: GetResult = store.get(&location).await.unwrap();
-        let bytes: Bytes = result.bytes().await.unwrap();
-        Cursor::new(bytes)
-    };
-
-    // Read GeoTIFF into an ndarray::Array
-    let arr: Array3<f32> = read_geotiff::<f32, _>(stream).unwrap();
-    assert_eq!(arr.dim(), (1, 549, 549));
-    assert_eq!(arr[[0, 500, 500]], 0.13482364);
+    let rasterband: RasterBand = dataset.rasterband(1).unwrap();
+    println!("rasterband description: {:?}", rasterband.description());
+    println!("rasterband no_data_value: {:?}", rasterband.no_data_value());
+    println!("rasterband type: {:?}", rasterband.band_type());
+    println!("rasterband scale: {:?}", rasterband.scale());
+    println!("rasterband offset: {:?}", rasterband.offset());
+    if let Ok(rv) = rasterband.read_as::<u8>((20, 30), (2, 3), (2, 3), None) {
+        println!("{:?}", rv.data());
+    }
 }
 
-#[tokio::test]
-async fn test_example() {}
+#[test]
+fn test_example() {
+    let _ = example();
+}
