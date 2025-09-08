@@ -38,29 +38,13 @@ pub fn example() {
         for y in 0..y_blocks {
             let block = (x, y);
             let (red, green, blue, alpha) = (
-                r.read_block::<u8>(block)
-                    .unwrap()
-                    .to_array()
-                    .unwrap()
-                    .into_flat(),
-                g.read_block::<u8>(block)
-                    .unwrap()
-                    .to_array()
-                    .unwrap()
-                    .into_flat(),
-                b.read_block::<u8>(block)
-                    .unwrap()
-                    .to_array()
-                    .unwrap()
-                    .into_flat(),
-                a.read_block::<u8>(block)
-                    .unwrap()
-                    .to_array()
-                    .unwrap()
-                    .into_flat(),
+                r.read_block::<u8>(block).unwrap().to_array().unwrap(),
+                g.read_block::<u8>(block).unwrap().to_array().unwrap(),
+                b.read_block::<u8>(block).unwrap().to_array().unwrap(),
+                a.read_block::<u8>(block).unwrap().to_array().unwrap(),
             );
-            let img_arr = ndarray::stack![Axis(0), red, green, blue, alpha];
-            let img_arr = img_arr.flatten_with_order(ndarray::Order::ColumnMajor);
+            let img_arr = ndarray::stack![Axis(2), red, green, blue, alpha];
+            let img_arr = img_arr.flatten_with_order(ndarray::Order::RowMajor);
             let img = image::RgbaImage::from_raw(
                 block_size.0 as u32,
                 block_size.1 as u32,
@@ -68,6 +52,7 @@ pub fn example() {
             )
             .unwrap();
             img.save(format!("output/{x}.{y}.png")).ok();
+            return;
         }
     }
 }
