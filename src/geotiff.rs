@@ -52,7 +52,6 @@ pub fn example() {
             )
             .unwrap();
             img.save(format!("output/{x}.{y}.png")).ok();
-            return;
         }
     }
 }
