@@ -19,20 +19,33 @@ pub fn example() {
     let size = rasterband.size();
     println!("rasterband size: {:?}", size);
     println!("rasterband overviews: {:?}", rasterband.overview_count());
-    for i in 0..rasterband.overview_count().unwrap() {
-        let overview = rasterband.overview(i as usize).unwrap();
+    for i in -1..rasterband.overview_count().unwrap() {
+        let overview = if i == -1 {
+            &rasterband
+        } else {
+            &rasterband.overview(i as usize).unwrap()
+        };
         let o_size = overview.size();
-        let data = overview.read_block::<u8>((0, 0)).unwrap();
-        let block_size = overview.block_size();
-        image::save_buffer(
-            format!("overview_{i}.png"),
-            data.data(),
-            block_size.0.try_into().unwrap(),
-            block_size.1.try_into().unwrap(),
-            image::ColorType::L8,
-        )
-        .unwrap();
         println!("overview {i}: {:?}, {}x", o_size, size.0 / o_size.0);
+        let block_size = overview.block_size();
+        let x_blocks = (o_size.0 + block_size.0 - 1) / block_size.0;
+        let y_blocks = (o_size.1 + block_size.1 - 1) / block_size.1;
+        let out_dir = format!("overview_{i}.png");
+        std::fs::create_dir(&out_dir).unwrap();
+
+        for x in 0..x_blocks {
+            for y in 0..y_blocks {
+                let data = overview.read_block::<u8>((x, y)).unwrap();
+                image::save_buffer(
+                    format!("{out_dir}/{x}.{y}.png"),
+                    data.data(),
+                    block_size.0.try_into().unwrap(),
+                    block_size.1.try_into().unwrap(),
+                    image::ColorType::L8,
+                )
+                .unwrap();
+            }
+        }
     }
 }
 
