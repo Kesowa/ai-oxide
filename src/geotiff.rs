@@ -1,6 +1,6 @@
-use gdal::raster::RasterBand;
-use gdal::{Dataset, Metadata};
-use std::path::Path;
+use gdal::{raster::RasterBand, Dataset, Metadata};
+use ndarray::Axis;
+use std::{collections::HashMap, path::Path};
 
 pub fn example() {
     // let path = Path::new(
@@ -8,43 +8,66 @@ pub fn example() {
     // );
     let path = Path::new("./ortho.tiff");
     let dataset = Dataset::open(path).unwrap();
-    println!("dataset description: {:?}", dataset.description());
-
-    let rasterband: RasterBand = dataset.rasterband(1).unwrap();
-    println!("rasterband description: {:?}", rasterband.description());
     println!(
-        "rasterband color: {:?}",
-        rasterband.color_interpretation().name()
+        "dataset metadata: {:#?}",
+        dataset.metadata().collect::<Vec<_>>()
     );
-    let size = rasterband.size();
-    println!("rasterband size: {:?}", size);
-    println!("rasterband overviews: {:?}", rasterband.overview_count());
-    for i in -1..rasterband.overview_count().unwrap() {
-        let overview = if i == -1 {
-            &rasterband
-        } else {
-            &rasterband.overview(i as usize).unwrap()
-        };
-        let o_size = overview.size();
-        println!("overview {i}: {:?}, {}x", o_size, size.0 / o_size.0);
-        let block_size = overview.block_size();
-        let x_blocks = (o_size.0 + block_size.0 - 1) / block_size.0;
-        let y_blocks = (o_size.1 + block_size.1 - 1) / block_size.1;
-        let out_dir = format!("overview_{i}.png");
-        std::fs::create_dir(&out_dir).unwrap();
-
-        for x in 0..x_blocks {
-            for y in 0..y_blocks {
-                let data = overview.read_block::<u8>((x, y)).unwrap();
-                image::save_buffer(
-                    format!("{out_dir}/{x}.{y}.png"),
-                    data.data(),
-                    block_size.0.try_into().unwrap(),
-                    block_size.1.try_into().unwrap(),
-                    image::ColorType::L8,
-                )
-                .unwrap();
-            }
+    println!("dataset bands: {:?}", dataset.raster_count());
+    println!("dataset size: {:?}", dataset.raster_size());
+    println!("dataset projection: {:?}", dataset.projection());
+    let band_map = HashMap::<String, RasterBand>::from_iter(
+        dataset
+            .rasterbands()
+            .filter_map(|r| r.ok())
+            .map(|r| (r.color_interpretation().name(), r)),
+    );
+    println!("{:?}", band_map.keys());
+    let (r, g, b, a) = (
+        band_map.get("Red").unwrap(),
+        band_map.get("Green").unwrap(),
+        band_map.get("Blue").unwrap(),
+        band_map.get("Alpha").unwrap(),
+    );
+    let block_size = r.block_size();
+    let raster_size = r.size();
+    let (x_blocks, y_blocks) = (
+        (raster_size.0 + block_size.0 - 1) / block_size.0,
+        (raster_size.1 + block_size.1 - 1) / block_size.1,
+    );
+    for x in 0..x_blocks {
+        for y in 0..y_blocks {
+            let block = (x, y);
+            let (red, green, blue, alpha) = (
+                r.read_block::<u8>(block)
+                    .unwrap()
+                    .to_array()
+                    .unwrap()
+                    .into_flat(),
+                g.read_block::<u8>(block)
+                    .unwrap()
+                    .to_array()
+                    .unwrap()
+                    .into_flat(),
+                b.read_block::<u8>(block)
+                    .unwrap()
+                    .to_array()
+                    .unwrap()
+                    .into_flat(),
+                a.read_block::<u8>(block)
+                    .unwrap()
+                    .to_array()
+                    .unwrap()
+                    .into_flat(),
+            );
+            let img_arr = ndarray::stack![Axis(0), red, green, blue, alpha];
+            let img_arr = img_arr.flatten_with_order(ndarray::Order::ColumnMajor);
+            let img = image::RgbaImage::from_raw(
+                block_size.0 as u32,
+                block_size.1 as u32,
+                img_arr.as_slice().unwrap().to_vec(),
+            )
+            .unwrap();
+            img.save(format!("output/{x}.{y}.png")).ok();
         }
     }
 }

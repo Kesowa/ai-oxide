@@ -40,4 +40,4 @@ tracing-subscriber = { version = "0.3.18", features = [
 ] }
 url = "2.5.4"
 reqwest = "0.12.23"
-gdal = "0.18.0"
+gdal = { version = "0.18.0", features = ["ndarray"] }
