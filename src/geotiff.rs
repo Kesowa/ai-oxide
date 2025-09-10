@@ -50,8 +50,8 @@ pub fn example() {
         (raster_size.0 + block_size.0 - 1) / block_size.0,
         (raster_size.1 + block_size.1 - 1) / block_size.1,
     );
-    for x in 0..2 {
-        for y in 0..2 {
+    for x in 0..x_blocks {
+        for y in 0..y_blocks {
             let block = (x, y);
             let (red, green, blue, alpha) = (
                 r.read_block::<u8>(block).unwrap().to_array().unwrap(),
