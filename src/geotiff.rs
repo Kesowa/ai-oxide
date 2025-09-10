@@ -14,9 +14,14 @@ export GDAL_HTTP_MULTIPLEX=YES
 export GDAL_CACHEMAX=512MB
 export GDAL_DISABLE_READDIR_ON_OPEN=EMPTY_DIR
 export GDAL_READDIR_LIMIT_ON_OPEN=100
+export AWS_S3_ENDPOINT=127.0.0.1:9000
+export AWS_HTTPS=NO
+export AWS_ACCESS_KEY_ID=minioadmin
+export AWS_SECRET_ACCESS_KEY=minioadmin
+export AWS_VIRTUAL_HOSTING=FALSE
 */
 pub fn example() {
-    let path = Path::new("/vsicurl/http://localhost:9000/aru/raster/Ortho_25cm.tif");
+    let path = Path::new("/vsis3/aru/raster/Ortho_25cm.tif");
     // let path = Path::new("./ortho.tiff");
     let dataset = Dataset::open(path).unwrap();
     println!(
@@ -45,8 +50,8 @@ pub fn example() {
         (raster_size.0 + block_size.0 - 1) / block_size.0,
         (raster_size.1 + block_size.1 - 1) / block_size.1,
     );
-    for x in 0..x_blocks {
-        for y in 0..y_blocks {
+    for x in 0..2 {
+        for y in 0..2 {
             let block = (x, y);
             let (red, green, blue, alpha) = (
                 r.read_block::<u8>(block).unwrap().to_array().unwrap(),
