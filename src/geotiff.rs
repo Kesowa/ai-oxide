@@ -2,11 +2,22 @@ use gdal::{raster::RasterBand, Dataset, Metadata};
 use ndarray::Axis;
 use std::{collections::HashMap, path::Path};
 
+/* Set the following ENV Vars
+export GDAL_DISABLE_READDIR_ON_OPEN=EMPTY_DIR
+export CPL_VSIL_CURL_ALLOWED_EXTENSIONS=".tif,.tiff"
+export CPL_VSIL_CURL_CACHE_SIZE=200000000  # 200 MB
+export VSI_CACHE=TRUE
+export VSI_CACHE_SIZE=268435456  # ~256 MB
+export GDAL_NUM_THREADS=ALL_CPUS
+export GDAL_HTTP_MERGE_CONSECUTIVE_RANGES=YES
+export GDAL_HTTP_MULTIPLEX=YES
+export GDAL_CACHEMAX=512MB
+export GDAL_DISABLE_READDIR_ON_OPEN=EMPTY_DIR
+export GDAL_READDIR_LIMIT_ON_OPEN=100
+*/
 pub fn example() {
-    // let path = Path::new(
-    //     "/vsicurl/https://cdn-dev.kesowa.com/aru/raster/d8b5d21b-9e00-4016-af65-6cebf3016329.tif",
-    // );
-    let path = Path::new("./clipped.tif");
+    let path = Path::new("/vsicurl/http://localhost:9000/aru/raster/Ortho_25cm.tif");
+    // let path = Path::new("./ortho.tiff");
     let dataset = Dataset::open(path).unwrap();
     println!(
         "dataset metadata: {:#?}",
@@ -34,15 +45,9 @@ pub fn example() {
         (raster_size.0 + block_size.0 - 1) / block_size.0,
         (raster_size.1 + block_size.1 - 1) / block_size.1,
     );
-    let mask = r.open_mask_band().unwrap();
     for x in 0..x_blocks {
         for y in 0..y_blocks {
             let block = (x, y);
-            let mask_block = mask.read_block::<u8>(block).unwrap().to_array().unwrap();
-            if mask_block.iter().any(|&m| m != 0) == false {
-                println!("block {:?} is empty, skipping", block);
-                continue;
-            }
             let (red, green, blue, alpha) = (
                 r.read_block::<u8>(block).unwrap().to_array().unwrap(),
                 g.read_block::<u8>(block).unwrap().to_array().unwrap(),
