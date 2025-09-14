@@ -52,12 +52,12 @@ pub fn example() {
     );
     for x in 0..x_blocks {
         for y in 0..y_blocks {
-            let block = (x, y);
+            let offset = (x * block_size.0, y * block_size.1);
             let (red, green, blue, alpha) = (
-                r.read_block::<u8>(block).unwrap().to_array().unwrap(),
-                g.read_block::<u8>(block).unwrap().to_array().unwrap(),
-                b.read_block::<u8>(block).unwrap().to_array().unwrap(),
-                a.read_block::<u8>(block).unwrap().to_array().unwrap(),
+                r.read_as::<u8>(offset, block_size, block_size).unwrap().to_array().unwrap(),
+                g.read_as::<u8>(offset, block_size, block_size).unwrap().to_array().unwrap(),
+                b.read_as::<u8>(offset, block_size, block_size).unwrap().to_array().unwrap(),
+                a.read_as::<u8>(offset, block_size, block_size).unwrap().to_array().unwrap(),
             );
             let img_arr = ndarray::stack![Axis(2), red, green, blue, alpha];
             let img_arr = img_arr.flatten_with_order(ndarray::Order::RowMajor);
