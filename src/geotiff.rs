@@ -1,4 +1,5 @@
 use gdal::{raster::RasterBand, Dataset, Metadata};
+use gdal::raster::ResampleAlg;
 use ndarray::Axis;
 use std::{collections::HashMap, path::Path};
 
@@ -52,12 +53,29 @@ pub fn example() {
     );
     for x in 0..x_blocks {
         for y in 0..y_blocks {
-            let offset = (x * block_size.0, y * block_size.1);
+            let offset_x = (x * block_size.0) as isize;
+            let offset_y = (y * block_size.1) as isize;
+
+            let window_size = (block_size.0, block_size.1);
+            let buffer_size = (block_size.0, block_size.1);
+
             let (red, green, blue, alpha) = (
-                r.read_as::<u8>(offset, block_size, block_size).unwrap().to_array().unwrap(),
-                g.read_as::<u8>(offset, block_size, block_size).unwrap().to_array().unwrap(),
-                b.read_as::<u8>(offset, block_size, block_size).unwrap().to_array().unwrap(),
-                a.read_as::<u8>(offset, block_size, block_size).unwrap().to_array().unwrap(),
+                r.read_as::<u8>((offset_x, offset_y), window_size, buffer_size, None)
+                    .unwrap()
+                    .to_array()
+                    .unwrap(),
+                g.read_as::<u8>((offset_x, offset_y), window_size, buffer_size, None)
+                    .unwrap()
+                    .to_array()
+                    .unwrap(),
+                b.read_as::<u8>((offset_x, offset_y), window_size, buffer_size, None)
+                    .unwrap()
+                    .to_array()
+                    .unwrap(),
+                a.read_as::<u8>((offset_x, offset_y), window_size, buffer_size, None)
+                    .unwrap()
+                    .to_array()
+                    .unwrap(),
             );
             let img_arr = ndarray::stack![Axis(2), red, green, blue, alpha];
             let img_arr = img_arr.flatten_with_order(ndarray::Order::RowMajor);
