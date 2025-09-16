@@ -1,6 +1,5 @@
 use gdal::{raster::RasterBand, Dataset, Metadata};
-use gdal::raster::ResampleAlg;
-use ndarray::Axis;
+use ndarray::{s, Array3, Axis};
 use std::{collections::HashMap, path::Path};
 
 /* Set the following ENV Vars
@@ -22,8 +21,8 @@ export AWS_SECRET_ACCESS_KEY=minioadmin
 export AWS_VIRTUAL_HOSTING=FALSE
 */
 pub fn example() {
-    let path = Path::new("/vsis3/aru/raster/Ortho_25cm.tif");
-    // let path = Path::new("./ortho.tiff");
+    // let path = Path::new("/vsis3/aru/raster/Ortho_25cm.tif");
+    let path = Path::new("./clippedv2.tif");
     let dataset = Dataset::open(path).unwrap();
     println!(
         "dataset metadata: {:#?}",
@@ -39,49 +38,41 @@ pub fn example() {
             .map(|r| (r.color_interpretation().name(), r)),
     );
     println!("{:?}", band_map.keys());
-    let (r, g, b, a) = (
+    let bands = [
         band_map.get("Red").unwrap(),
         band_map.get("Green").unwrap(),
         band_map.get("Blue").unwrap(),
         band_map.get("Alpha").unwrap(),
-    );
-    let block_size = r.block_size();
-    let raster_size = r.size();
-    let (x_blocks, y_blocks) = (
-        (raster_size.0 + block_size.0 - 1) / block_size.0,
-        (raster_size.1 + block_size.1 - 1) / block_size.1,
-    );
-    for x in 0..x_blocks {
-        for y in 0..y_blocks {
-            let offset_x = (x * block_size.0) as isize;
-            let offset_y = (y * block_size.1) as isize;
-
-            let window_size = (block_size.0, block_size.1);
-            let buffer_size = (block_size.0, block_size.1);
-
-            let (red, green, blue, alpha) = (
-                r.read_as::<u8>((offset_x, offset_y), window_size, buffer_size, None)
-                    .unwrap()
-                    .to_array()
-                    .unwrap(),
-                g.read_as::<u8>((offset_x, offset_y), window_size, buffer_size, None)
-                    .unwrap()
-                    .to_array()
-                    .unwrap(),
-                b.read_as::<u8>((offset_x, offset_y), window_size, buffer_size, None)
-                    .unwrap()
-                    .to_array()
-                    .unwrap(),
-                a.read_as::<u8>((offset_x, offset_y), window_size, buffer_size, None)
-                    .unwrap()
-                    .to_array()
-                    .unwrap(),
+    ];
+    let block_size = (512, 512);
+    let overlap = 1;
+    let raster_size = bands[0].size();
+    for x in (0..raster_size.0).step_by(block_size.0 / overlap) {
+        for y in (0..raster_size.1).step_by(block_size.1 / overlap) {
+            let window_size = (
+                block_size.0.min(raster_size.0 - x),
+                block_size.1.min(raster_size.1 - y),
             );
-            let img_arr = ndarray::stack![Axis(2), red, green, blue, alpha];
+            let buffer_size = block_size;
+            let offset = (x as isize, y as isize);
+
+            let mut img_arr: Array3<u8> = Array3::zeros((block_size.0, block_size.1, bands.len()));
+
+            for (index, band) in bands.iter().enumerate() {
+                let window = band
+                    .read_as::<u8>(offset, window_size, window_size, None)
+                    .unwrap()
+                    .to_array()
+                    .unwrap();
+                let mut channel = img_arr.index_axis_mut(Axis(2), index);
+                let mut view = channel.slice_mut(s![0..window_size.1, 0..window_size.0]);
+                view += &window;
+            }
+
             let img_arr = img_arr.flatten_with_order(ndarray::Order::RowMajor);
             let img = image::RgbaImage::from_raw(
-                block_size.0 as u32,
-                block_size.1 as u32,
+                buffer_size.0 as u32,
+                buffer_size.1 as u32,
                 img_arr.as_slice().unwrap().to_vec(),
             )
             .unwrap();
