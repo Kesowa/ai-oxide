@@ -44,11 +44,16 @@ pub fn example() {
         band_map.get("Blue").unwrap(),
         band_map.get("Alpha").unwrap(),
     ];
+    // Final block size that will be generated for inferencing
     let block_size = (512, 512);
+    // Inverse of the step size ratio. 1 = no overlap. 2 = 50% overlap. 3 = 67% overlap. etc.
     let overlap = 1;
     let raster_size = bands[0].size();
     for x in (0..raster_size.0).step_by(block_size.0 / overlap) {
         for y in (0..raster_size.1).step_by(block_size.1 / overlap) {
+            // Boundary condition
+            // If the raster size is not a multiple of the block size, it will not be able to fill an entire block at the extents (the rightmost and bottommost edges).
+            // In that case, read the incomplete window and overlay it onto the proper block sized channel, snapped to the top-left corner
             let window_size = (
                 block_size.0.min(raster_size.0 - x),
                 block_size.1.min(raster_size.1 - y),
@@ -65,10 +70,12 @@ pub fn example() {
                     .to_array()
                     .unwrap();
                 let mut channel = img_arr.index_axis_mut(Axis(2), index);
+                // Crop the channel to align with the window size at the top-left corner
                 let mut view = channel.slice_mut(s![0..window_size.1, 0..window_size.0]);
                 view += &window;
             }
 
+            // Convert 3D array into pixel-interleaved linear array
             let img_arr = img_arr.flatten_with_order(ndarray::Order::RowMajor);
             let img = image::RgbaImage::from_raw(
                 buffer_size.0 as u32,
