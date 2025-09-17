@@ -23,15 +23,16 @@ impl Infer {
             .with_optimization_level(GraphOptimizationLevel::Level3)?
             .with_intra_threads(4)?
             .commit_from_file(model_path)?;
+        println!("{:#?}", session.inputs[0]);
         Ok(Self { session })
     }
 
     pub fn infer_image(&self, image: &DynamicImage) -> Result<Vec<f32>> {
-        let resized = resize_padded(image, 512, 512);
-        let image = Array4::from_shape_vec((1, 512, 512, 3), resized.into_vec())
+        let resized = resize_padded(image, 224, 224);
+        let image = Array4::from_shape_vec((1, 224, 224, 3), resized.into_vec())
             .expect("This should never fail");
         let mut image = image.mapv(|e| f32::from(e) / 255.0);
-        image.swap_axes(2, 1);
+        image.swap_axes(3, 1);
         let tensor = Tensor::from_array(image)?;
         let outputs = self.session.run(ort::inputs![tensor]?)?;
         let generated_tags = outputs[0].try_extract_tensor::<f32>()?.flatten().to_vec();
@@ -67,4 +68,13 @@ fn resize_padded(
         (max_height - height) as i64 / 2,
     );
     img
+}
+
+#[test]
+fn test_infer() {
+    let model = Infer::new("./mobilenetv2-7.onnx").unwrap();
+    let inference = model
+        .infer_image(&image::open("./output/1536.2048.png").unwrap())
+        .unwrap();
+    println!("{}", inference.len());
 }
