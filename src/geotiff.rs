@@ -1,6 +1,8 @@
 use gdal::{raster::RasterBand, Dataset, Metadata};
 use ndarray::{s, Array3, Axis};
 use std::{collections::HashMap, path::Path};
+use gdal::spatial_ref::CoordTransform;
+use gdal::spatial_ref::SpatialRef;
 
 /* Set the following ENV Vars
 export GDAL_DISABLE_READDIR_ON_OPEN=EMPTY_DIR
@@ -20,6 +22,30 @@ export AWS_ACCESS_KEY_ID=minioadmin
 export AWS_SECRET_ACCESS_KEY=minioadmin
 export AWS_VIRTUAL_HOSTING=FALSE
 */
+
+/// Convert pixel (x, y) from a dataset into geocoordinates (lon, lat).
+pub fn pixel_to_geocoord(dataset: &Dataset, pixel_x: f64, pixel_y: f64) -> gdal::errors::Result<(f64, f64)> {
+    // Get the affine geo-transform: [originX, pixelWidth, 0, originY, 0, pixelHeight]
+    let transform = dataset.geo_transform()?; 
+
+    // Apply affine transformation (convert pixel -> projected coordinate system)
+    let geo_x = transform[0] + pixel_x * transform[1] + pixel_y * transform[2];
+    let geo_y = transform[3] + pixel_x * transform[4] + pixel_y * transform[5];
+
+    // Now, reproject into WGS84 (lat/lon) if needed
+    let spatial_ref = dataset.spatial_ref()?;            // CRS of dataset
+    let wgs84 = SpatialRef::from_epsg(4326)?;            // WGS84
+    let coord_transform = CoordTransform::new(&spatial_ref, &wgs84)?;
+
+    let mut x = [geo_x];
+    let mut y = [geo_y];
+    let mut z = [0.0];
+
+    coord_transform.transform_coords(&mut x, &mut y, &mut z)?;
+
+    Ok((x[0], y[0])) // lon, lat
+}
+
 pub fn example() {
     // let path = Path::new("/vsis3/aru/raster/Ortho_25cm.tif");
     let path = Path::new("./clippedv2.tif");
