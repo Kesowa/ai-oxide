@@ -31,8 +31,7 @@ impl Infer {
         let resized = resize_padded(image, 224, 224);
         let image = Array4::from_shape_vec((1, 224, 224, 3), resized.into_vec())
             .expect("This should never fail");
-        let mut image = image.mapv(|e| f32::from(e) / 255.0);
-        image.swap_axes(3, 1);
+        let image = image.permuted_axes([0, 3, 1, 2]);
         let tensor = Tensor::from_array(image)?;
         let outputs = self.session.run(ort::inputs![tensor]?)?;
         let generated_tags = outputs[0].try_extract_tensor::<f32>()?.flatten().to_vec();
