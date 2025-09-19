@@ -1,9 +1,7 @@
 use std::error::Error;
 
-use image::{
-    flat::SampleLayout, imageops::FilterType, DynamicImage, ImageBuffer, Pixel, Rgb, Rgba,
-};
-use ndarray::{Array3, Array4, ArrayView3, ShapeBuilder};
+use image::{flat::SampleLayout, imageops::FilterType, DynamicImage, ImageBuffer, Rgb};
+use ndarray::{Array3, ShapeBuilder};
 use ort::{
     execution_providers::CPUExecutionProvider,
     session::{builder::GraphOptimizationLevel, Session},
@@ -15,6 +13,8 @@ pub struct Infer {
 }
 
 pub type Result<T> = std::result::Result<T, Box<dyn Error>>;
+
+pub type Image = ImageBuffer<Rgb<u8>, Vec<u8>>;
 
 impl Infer {
     pub fn new(model_path: &str) -> Result<Self> {
@@ -29,32 +29,26 @@ impl Infer {
         Ok(Self { session })
     }
 
-    pub fn infer_image(&self, image: &DynamicImage) -> Result<Vec<f32>> {
-        let resized = resize_padded(image, 224, 224);
-        let image = Array4::from_shape_vec((1, 224, 224, 3), resized.into_vec())
-            .expect("This should never fail");
-        let image = image.permuted_axes([0, 3, 1, 2]);
-        let tensor = Tensor::from_array(image)?;
+    pub fn infer_image(&self, image: DynamicImage) -> Result<Vec<f32>> {
+        let resized = resize_padded(image.into_rgb8(), 224, 224);
+        let array = image_to_ndarray3(resized);
+        let tensor = Tensor::from_array(array)?;
         let outputs = self.session.run(ort::inputs![tensor]?)?;
         let generated_tags = outputs[0].try_extract_tensor::<f32>()?.flatten().to_vec();
         Ok(generated_tags)
     }
 
-    pub fn infer(&self, image: &DynamicImage) -> Result<Vec<f32>> {
-        let resized = resize_padded(image, 224, 224);
-        let image = Array4::from_shape_vec((1, 224, 224, 3), resized.into_vec())
-            .expect("This should never fail");
-        let image = image.permuted_axes([0, 3, 1, 2]);
-        let tensor = Tensor::from_array(image)?;
+    pub fn infer(&self, array: Array3<u8>) -> Result<Vec<f32>> {
+        let resized = resize_padded(ndarray3_to_image(array), 224, 224);
+        let array = image_to_ndarray3(resized);
+        let tensor = Tensor::from_array(array)?;
         let outputs = self.session.run(ort::inputs![tensor]?)?;
         let generated_tags = outputs[0].try_extract_tensor::<f32>()?.flatten().to_vec();
         Ok(generated_tags)
     }
 }
 
-pub fn image_to_ndarray3<P: Pixel + 'static>(
-    image: ImageBuffer<P, Vec<P::Subpixel>>,
-) -> Array3<P::Subpixel> {
+pub fn image_to_ndarray3(image: Image) -> Array3<u8> {
     let SampleLayout {
         channels,
         channel_stride,
@@ -68,7 +62,7 @@ pub fn image_to_ndarray3<P: Pixel + 'static>(
     Array3::from_shape_vec(shape.strides(strides), image.into_raw()).unwrap()
 }
 
-pub fn ndarray3_to_image(array: Array3<u8>) -> ImageBuffer<Rgb<u8>, Vec<u8>> {
+pub fn ndarray3_to_image(array: Array3<u8>) -> Image {
     let shape = array.shape();
     let width = shape[1];
     let height = shape[2];
@@ -84,11 +78,7 @@ pub fn ndarray3_to_image(array: Array3<u8>) -> ImageBuffer<Rgb<u8>, Vec<u8>> {
     .unwrap()
 }
 
-fn resize_padded(
-    img: &DynamicImage,
-    max_width: u32,
-    max_height: u32,
-) -> ImageBuffer<Rgb<u8>, Vec<u8>> {
+fn resize_padded(img: Image, max_width: u32, max_height: u32) -> Image {
     let mut width = img.width();
     let mut height = img.height();
     let aspect_ratio = (width as f32) / (height as f32);
@@ -103,7 +93,7 @@ fn resize_padded(
         width = ((height as f32) * aspect_ratio) as u32;
     }
 
-    let thumbnail = img.resize_exact(width, height, FilterType::Gaussian);
+    let thumbnail = DynamicImage::ImageRgb8(img).resize_exact(width, height, FilterType::Gaussian);
     let mut img = ImageBuffer::from_pixel(max_width, max_height, Rgb([255, 255, 255]));
     image::imageops::overlay(
         &mut img,
@@ -118,7 +108,7 @@ fn resize_padded(
 fn test_infer() {
     let model = Infer::new("./mobilenetv2-7.onnx").unwrap();
     let inference = model
-        .infer_image(&image::open("./output/1536.2048.png").unwrap())
+        .infer_image(image::open("./output/1536.2048.png").unwrap())
         .unwrap();
     println!("{}", inference.len());
 }
