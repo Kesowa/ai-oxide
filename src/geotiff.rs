@@ -4,6 +4,8 @@ use gdal::{raster::RasterBand, Dataset, Metadata};
 use ndarray::{s, Array3, Axis};
 use std::{collections::HashMap, path::Path};
 
+use crate::infer::ndarray3_to_image;
+
 /* Set the following ENV Vars
 export GDAL_DISABLE_READDIR_ON_OPEN=EMPTY_DIR
 export CPL_VSIL_CURL_ALLOWED_EXTENSIONS=".tif,.tiff"
@@ -49,7 +51,7 @@ pub fn pixel_to_geocoord(
 
 pub fn example() {
     // let path = Path::new("/vsis3/aru/raster/Ortho_25cm.tif");
-    let path = Path::new("./clippedv2.tif");
+    let path = Path::new("./ortho.tiff");
     let dataset = Dataset::open(path).unwrap();
     println!(
         "dataset metadata: {:#?}",
@@ -69,7 +71,7 @@ pub fn example() {
         band_map.get("Red").unwrap(),
         band_map.get("Green").unwrap(),
         band_map.get("Blue").unwrap(),
-        band_map.get("Alpha").unwrap(),
+        // band_map.get("Alpha").unwrap(),
     ];
     // Final block size that will be generated for inferencing
     let block_size = (512, 512);
@@ -85,10 +87,9 @@ pub fn example() {
                 block_size.0.min(raster_size.0 - x),
                 block_size.1.min(raster_size.1 - y),
             );
-            let buffer_size = block_size;
             let offset = (x as isize, y as isize);
 
-            let mut img_arr: Array3<u8> = Array3::zeros((block_size.0, block_size.1, bands.len()));
+            let mut img_arr: Array3<u8> = Array3::zeros((bands.len(), block_size.0, block_size.1));
 
             for (index, band) in bands.iter().enumerate() {
                 let window = band
@@ -96,21 +97,16 @@ pub fn example() {
                     .unwrap()
                     .to_array()
                     .unwrap();
-                let mut channel = img_arr.index_axis_mut(Axis(2), index);
+                let mut channel = img_arr.index_axis_mut(Axis(0), index);
                 // Crop the channel to align with the window size at the top-left corner
                 let mut view = channel.slice_mut(s![0..window_size.1, 0..window_size.0]);
                 view += &window;
             }
 
             // Convert 3D array into pixel-interleaved linear array
-            let img_arr = img_arr.flatten_with_order(ndarray::Order::RowMajor);
-            let img = image::RgbaImage::from_raw(
-                buffer_size.0 as u32,
-                buffer_size.1 as u32,
-                img_arr.as_slice().unwrap().to_vec(),
-            )
-            .unwrap();
+            let img = ndarray3_to_image(img_arr);
             img.save(format!("output/{x}.{y}.png")).ok();
+            return;
         }
     }
 }
