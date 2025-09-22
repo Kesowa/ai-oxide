@@ -1,50 +1,64 @@
-use std::error::Error;
-
-use image::{flat::SampleLayout, imageops::FilterType, DynamicImage, ImageBuffer, Rgb};
-use ndarray::{Array3, ShapeBuilder};
+use image::{DynamicImage, ImageBuffer, Rgb, flat::SampleLayout, imageops::FilterType};
+use ndarray::{Array3, Axis, ShapeBuilder};
 use ort::{
     execution_providers::CPUExecutionProvider,
-    session::{builder::GraphOptimizationLevel, Session},
-    value::Tensor,
+    session::{Session, builder::GraphOptimizationLevel},
+    value::TensorRef,
 };
 
 pub struct Infer {
     session: Session,
+    input_size: u32,
 }
-
-pub type Result<T> = std::result::Result<T, Box<dyn Error>>;
 
 pub type Image = ImageBuffer<Rgb<u8>, Vec<u8>>;
 
 impl Infer {
-    pub fn new(model_path: &str) -> Result<Self> {
+    pub fn new(model_path: &str) -> Result<Self, ort::Error> {
         ort::init()
             .with_execution_providers([CPUExecutionProvider::default().build()])
             .commit()?;
         let session = Session::builder()?
             .with_optimization_level(GraphOptimizationLevel::Level3)?
-            .with_intra_threads(4)?
+            .with_intra_threads(num_cpus::get())?
             .commit_from_file(model_path)?;
-        println!("{:#?}", session.inputs[0]);
-        Ok(Self { session })
+        let input = &session.inputs[0];
+        let input_size;
+        if let Some(shape) = input.input_type.tensor_shape()
+            && shape[1] == 3
+            && shape[2] == shape[3]
+        {
+            input_size = shape[2] as u32;
+        } else {
+            return Err(ort::Error::new_with_code(
+                ort::ErrorCode::GenericFailure,
+                format!("invalid input shape: {:?}", input.input_type.tensor_shape()),
+            ));
+        }
+        Ok(Self {
+            session,
+            input_size,
+        })
     }
 
-    pub fn infer_image(&self, image: DynamicImage) -> Result<Vec<f32>> {
-        let resized = resize_padded(image.into_rgb8(), 224, 224);
+    pub fn infer_image(&mut self, image: DynamicImage) -> Result<Vec<f32>, ort::Error> {
+        let resized = resize_padded(image.into_rgb8(), self.input_size);
         let array = image_to_ndarray3(resized);
-        let tensor = Tensor::from_array(array)?;
-        let outputs = self.session.run(ort::inputs![tensor]?)?;
-        let generated_tags = outputs[0].try_extract_tensor::<f32>()?.flatten().to_vec();
-        Ok(generated_tags)
+        self.infer(array)
     }
 
-    pub fn infer(&self, array: Array3<u8>) -> Result<Vec<f32>> {
-        let resized = resize_padded(ndarray3_to_image(array), 224, 224);
-        let array = image_to_ndarray3(resized);
-        let tensor = Tensor::from_array(array)?;
-        let outputs = self.session.run(ort::inputs![tensor]?)?;
-        let generated_tags = outputs[0].try_extract_tensor::<f32>()?.flatten().to_vec();
-        Ok(generated_tags)
+    pub fn infer(&mut self, array: Array3<u8>) -> Result<Vec<f32>, ort::Error> {
+        let input_name = self.session.inputs[0].name.clone();
+        let output_name = self.session.outputs[0].name.clone();
+        let stacked = array
+            .as_standard_layout()
+            // .permuted_axes([1, 2, 0])
+            .mapv(|v| v as f32)
+            .insert_axis(Axis(0));
+        let outputs = self
+            .session
+            .run(ort::inputs![input_name => TensorRef::from_array_view(&stacked)?])?;
+        Ok(outputs[output_name].try_extract_tensor::<f32>()?.1.to_vec())
     }
 }
 
@@ -70,45 +84,33 @@ pub fn ndarray3_to_image(array: Array3<u8>) -> Image {
     image::ImageBuffer::from_raw(
         width as u32,
         height as u32,
-        arr.flatten_with_order(ndarray::Order::RowMajor)
-            .as_slice()
-            .unwrap()
-            .to_vec(),
+        arr.flatten_with_order(ndarray::Order::RowMajor).to_vec(),
     )
     .unwrap()
 }
 
-fn resize_padded(img: Image, max_width: u32, max_height: u32) -> Image {
-    let mut width = img.width();
-    let mut height = img.height();
-    let aspect_ratio = (width as f32) / (height as f32);
+fn resize_padded(img: Image, target_size: u32) -> Image {
+    let width = img.width();
+    let height = img.height();
+    let max_dim = width.max(height);
+    let pad_left = (max_dim - width) / 2;
+    let pad_top = (max_dim - height) / 2;
 
-    if width > max_width || height < max_height {
-        width = max_width;
-        height = ((width as f32) / aspect_ratio) as u32;
+    let mut padded = ImageBuffer::from_pixel(max_dim, max_dim, Rgb([255, 255, 255]));
+    image::imageops::overlay(&mut padded, &img, pad_left.into(), pad_top.into());
+
+    if max_dim != target_size {
+        padded = image::imageops::resize(&padded, target_size, target_size, FilterType::CatmullRom);
     }
 
-    if height > max_height || width < max_width {
-        height = max_height;
-        width = ((height as f32) * aspect_ratio) as u32;
-    }
-
-    let thumbnail = DynamicImage::ImageRgb8(img).resize_exact(width, height, FilterType::Gaussian);
-    let mut img = ImageBuffer::from_pixel(max_width, max_height, Rgb([255, 255, 255]));
-    image::imageops::overlay(
-        &mut img,
-        &thumbnail.to_rgb8(),
-        (max_width - width) as i64 / 2,
-        (max_height - height) as i64 / 2,
-    );
-    img
+    padded
 }
 
 #[test]
 fn test_infer() {
-    let model = Infer::new("./mobilenetv2-7.onnx").unwrap();
+    let mut model = Infer::new("./mobilenetv2-7.onnx").unwrap();
     let inference = model
-        .infer_image(image::open("./output/1536.2048.png").unwrap())
+        .infer_image(image::open("./output/0.0.png").unwrap())
         .unwrap();
     println!("{}", inference.len());
 }
