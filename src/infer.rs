@@ -20,7 +20,9 @@ impl Infer {
             .commit()?;
         let session = Session::builder()?
             .with_optimization_level(GraphOptimizationLevel::Level3)?
-            .with_intra_threads(num_cpus::get())?
+            .with_parallel_execution(true)?
+            .with_inter_threads(2)?
+            .with_intra_threads(num_cpus::get_physical())?
             .commit_from_file(model_path)?;
         let input = &session.inputs[0];
         let input_size;
@@ -52,7 +54,6 @@ impl Infer {
         let output_name = self.session.outputs[0].name.clone();
         let stacked = array
             .as_standard_layout()
-            // .permuted_axes([1, 2, 0])
             .mapv(|v| v as f32)
             .insert_axis(Axis(0));
         let outputs = self
