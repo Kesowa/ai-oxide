@@ -7,6 +7,7 @@ use tracing::{error, info};
 
 pub mod geotiff;
 pub mod infer;
+pub mod post;
 pub mod telemetry;
 pub mod utils;
 pub mod vod;
@@ -118,9 +119,8 @@ mod test {
         decompress,
         telemetry::{get_subscriber, init_subscriber},
         utils::{
-            create_bucket,
+            Dir, Object, S3, create_bucket,
             mock::{MockDir, MockObject},
-            Dir, Object, S3,
         },
     };
 

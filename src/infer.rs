@@ -1,10 +1,12 @@
 use image::{DynamicImage, ImageBuffer, Rgb, flat::SampleLayout, imageops::FilterType};
-use ndarray::{Array3, Axis, ShapeBuilder};
+use ndarray::{Array3, Axis, ShapeBuilder, s};
 use ort::{
     execution_providers::CPUExecutionProvider,
     session::{Session, builder::GraphOptimizationLevel},
     value::TensorRef,
 };
+
+use crate::post;
 
 pub struct Infer {
     session: Session,
@@ -28,9 +30,9 @@ impl Infer {
         let input_size;
         if let Some(shape) = input.input_type.tensor_shape()
             && shape[1] == 3
-            && shape[2] == shape[3]
+        // && shape[2] == shape[3]
         {
-            input_size = shape[2] as u32;
+            input_size = shape[2].max(shape[3]) as u32;
         } else {
             return Err(ort::Error::new_with_code(
                 ort::ErrorCode::GenericFailure,
@@ -43,23 +45,26 @@ impl Infer {
         })
     }
 
-    pub fn infer_image(&mut self, image: DynamicImage) -> Result<Vec<f32>, ort::Error> {
+    pub fn infer_image(&mut self, image: DynamicImage) -> Result<Vec<post::Box>, ort::Error> {
         let resized = resize_padded(image.into_rgb8(), self.input_size);
         let array = image_to_ndarray3(resized);
         self.infer(array)
     }
 
-    pub fn infer(&mut self, array: Array3<u8>) -> Result<Vec<f32>, ort::Error> {
+    pub fn infer(&mut self, array: Array3<u8>) -> Result<Vec<post::Box>, ort::Error> {
         let input_name = self.session.inputs[0].name.clone();
-        let output_name = self.session.outputs[0].name.clone();
+        // let output_name = self.session.outputs[0].name.clone();
         let stacked = array
+            .slice(s![.., ..480, ..640])
             .as_standard_layout()
             .mapv(|v| v as f32)
             .insert_axis(Axis(0));
         let outputs = self
             .session
             .run(ort::inputs![input_name => TensorRef::from_array_view(&stacked)?])?;
-        Ok(outputs[output_name].try_extract_tensor::<f32>()?.1.to_vec())
+        let output = post::retinanet(outputs);
+        // Ok(outputs[output_name].try_extract_tensor::<f32>()?.1.to_vec())
+        Ok(output)
     }
 }
 
@@ -109,7 +114,7 @@ fn resize_padded(img: Image, target_size: u32) -> Image {
 
 #[test]
 fn test_infer() {
-    let mut model = Infer::new("./mobilenetv2-7.onnx").unwrap();
+    let mut model = Infer::new("./retinanet-9.onnx").unwrap();
     let inference = model
         .infer_image(image::open("./output/0.0.png").unwrap())
         .unwrap();
