@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use ndarray::{Array1, Array2, Array3, Array4, Axis, Ix4};
+use ndarray::{Array, Array1, Array2, Array3, Array4, Axis, Ix4, concatenate, s};
 use ort::{session::SessionOutputs, value::Tensor};
 
 pub struct Box {
@@ -43,13 +43,23 @@ pub fn retinanet(output: SessionOutputs) -> Vec<Box> {
             0.05,
             1000,
         ));
-        println!(
-            "stride: {stride}, class: {:?}; regress: {:?}",
-            cls_head.shape(),
-            reg_head.shape(),
-        );
     }
-    println!("anchors: {anchors:?}");
+    let (mut all_scores, mut all_boxes, mut all_classes) = (Vec::new(), Vec::new(), Vec::new());
+    for (scores, boxes, classes) in decoded.iter() {
+        all_scores.push(scores.view());
+        all_boxes.push(boxes.view());
+        all_classes.push(classes.view());
+    }
+    let all_scores = concatenate(Axis(1), &all_scores).unwrap();
+    let all_boxes = concatenate(Axis(1), &all_boxes).unwrap();
+    let all_classes = concatenate(Axis(1), &all_classes).unwrap();
+    let (scores, boxes, labels) = nms(&all_scores, &all_boxes, &all_classes, 0.5, 100);
+    println!(
+        "scores: {:?}, boxes: {:?}, labels: {:?}",
+        scores.shape(),
+        boxes.shape(),
+        labels.shape()
+    );
     todo!();
 }
 
@@ -265,4 +275,114 @@ pub fn decode(
     }
 
     (out_scores, out_boxes, out_classes)
+}
+
+pub fn nms(
+    all_scores: &Array2<f32>,  // [B, N]
+    all_boxes: &Array3<f32>,   // [B, N, 4]
+    all_classes: &Array2<i32>, // [B, N]
+    nms_thresh: f32,
+    ndetections: usize,
+) -> (Array2<f32>, Array3<f32>, Array2<i32>) {
+    let batch_size = all_scores.shape()[0];
+    let num_boxes = all_scores.shape()[1];
+
+    // Outputs
+    let mut out_scores = Array2::<f32>::zeros((batch_size, ndetections));
+    let mut out_boxes = Array3::<f32>::zeros((batch_size, ndetections, 4));
+    let mut out_classes = Array2::<i32>::zeros((batch_size, ndetections));
+
+    for b in 0..batch_size {
+        // Collect valid boxes
+        let mut scores: Vec<(usize, f32)> = (0..num_boxes)
+            .filter_map(|i| {
+                let s = all_scores[[b, i]];
+                if s > 0.0 { Some((i, s)) } else { None }
+            })
+            .collect();
+
+        if scores.is_empty() {
+            continue;
+        }
+
+        // Sort by score descending
+        scores.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+
+        // Build vectors
+        let mut boxes: Vec<[f32; 4]> = scores
+            .iter()
+            .map(|&(i, _)| {
+                let row = all_boxes.slice(s![b, i, ..]);
+                [row[0], row[1], row[2], row[3]]
+            })
+            .collect();
+
+        let mut cls: Vec<i32> = scores.iter().map(|&(i, _)| all_classes[[b, i]]).collect();
+        let mut scr: Vec<f32> = scores.iter().map(|&(_, s)| s).collect();
+
+        let mut kept_scores = Vec::new();
+        let mut kept_boxes = Vec::new();
+        let mut kept_classes = Vec::new();
+
+        let mut i = 0;
+        while i < scr.len() && kept_scores.len() < ndetections {
+            // Reference box
+            let ref_box = boxes[i];
+            let ref_cls = cls[i];
+            let ref_score = scr[i];
+
+            kept_scores.push(ref_score);
+            kept_boxes.push(ref_box);
+            kept_classes.push(ref_cls);
+
+            // Filter rest
+            let mut new_boxes = Vec::new();
+            let mut new_scores = Vec::new();
+            let mut new_classes = Vec::new();
+
+            for j in (i + 1)..scr.len() {
+                let iou = iou(ref_box, boxes[j]);
+                if cls[j] != ref_cls || iou <= nms_thresh {
+                    new_boxes.push(boxes[j]);
+                    new_scores.push(scr[j]);
+                    new_classes.push(cls[j]);
+                }
+            }
+
+            boxes = new_boxes;
+            scr = new_scores;
+            cls = new_classes;
+            i = 0; // restart from next top
+        }
+
+        let n_keep = kept_scores.len().min(ndetections);
+
+        for k in 0..n_keep {
+            out_scores[[b, k]] = kept_scores[k];
+            out_boxes
+                .slice_mut(s![b, k, ..])
+                .assign(&Array::from_vec(kept_boxes[k].to_vec()));
+            out_classes[[b, k]] = kept_classes[k];
+        }
+    }
+
+    (out_scores, out_boxes, out_classes)
+}
+
+/// Compute IoU between two boxes [x1, y1, x2, y2]
+fn iou(a: [f32; 4], b: [f32; 4]) -> f32 {
+    let (x1, y1, x2, y2) = (
+        a[0].max(b[0]),
+        a[1].max(b[1]),
+        a[2].min(b[2]),
+        a[3].min(b[3]),
+    );
+    let inter_w = (x2 - x1 + 1.0).max(0.0);
+    let inter_h = (y2 - y1 + 1.0).max(0.0);
+    let inter = inter_w * inter_h;
+
+    let area_a = (a[2] - a[0] + 1.0) * (a[3] - a[1] + 1.0);
+    let area_b = (b[2] - b[0] + 1.0) * (b[3] - b[1] + 1.0);
+
+    inter / (area_a + area_b - inter)
 }

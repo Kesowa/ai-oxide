@@ -42,4 +42,3 @@ url = "2.5.4"
 reqwest = "0.12.23"
 gdal = { version = "0.18.0", features = ["ndarray"] }
 num_cpus = "1.17.0"
-ndarray-stats = "0.6.0"
