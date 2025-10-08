@@ -45,15 +45,21 @@ pub fn retinanet(output: SessionOutputs) -> Vec<Box> {
             1000,
         ));
     }
-    let (mut all_scores, mut all_boxes, mut all_classes) = (Vec::new(), Vec::new(), Vec::new());
-    for (scores, boxes, classes) in decoded.iter() {
-        all_scores.push(scores.view());
-        all_boxes.push(boxes.view());
-        all_classes.push(classes.view());
-    }
-    let all_scores = concatenate(Axis(1), &all_scores).unwrap();
-    let all_boxes = concatenate(Axis(1), &all_boxes).unwrap();
-    let all_classes = concatenate(Axis(1), &all_classes).unwrap();
+    let all_scores = concatenate(
+        Axis(1),
+        &decoded.iter().map(|d| d.0.view()).collect::<Vec<_>>(),
+    )
+    .unwrap();
+    let all_boxes = concatenate(
+        Axis(1),
+        &decoded.iter().map(|d| d.1.view()).collect::<Vec<_>>(),
+    )
+    .unwrap();
+    let all_classes = concatenate(
+        Axis(1),
+        &decoded.iter().map(|d| d.2.view()).collect::<Vec<_>>(),
+    )
+    .unwrap();
     let (scores, boxes, labels) = nms(&all_scores, &all_boxes, &all_classes, 0.5, 100);
     let mut bboxes = Vec::with_capacity(100);
     for i in 0..100 {
@@ -77,23 +83,8 @@ pub fn generate_anchors(stride: f32, ratio_vals: &[f32], scales_vals: &[f32]) ->
     let num_scales = scales_vals.len();
     let num_anchors = num_ratios * num_scales;
 
-    // Expand ratios and scales to match like PyTorch repeat
-    let mut ratios: Vec<f32> = Vec::with_capacity(num_anchors);
-    for _ in 0..num_scales {
-        for &r in ratio_vals {
-            ratios.push(r);
-        }
-    }
-
-    let mut scales: Vec<f32> = Vec::with_capacity(num_anchors);
-    for &s in scales_vals {
-        for _ in 0..num_ratios {
-            scales.push(s);
-        }
-    }
-
-    let ratios = Array1::from(ratios);
-    let scales = Array1::from(scales);
+    let ratios = Array1::from(ratio_vals.repeat(num_scales));
+    let scales = Array1::from(scales_vals.repeat(num_ratios));
 
     // Base box size = stride x stride
     let wh = Array1::from(vec![stride; num_anchors]);
@@ -264,12 +255,8 @@ pub fn decode(
             // Anchor
             let mut anchor = Array2::<f32>::zeros((1, 4));
             for k in 0..4 {
-                anchor[[0, k]] = anchors[[a, k]]
-                    + if k < 2 {
-                        (if k % 2 == 0 { x } else { y }) as f32 * stride as f32
-                    } else {
-                        (if k % 2 == 0 { x } else { y }) as f32 * stride as f32
-                    };
+                anchor[[0, k]] =
+                    anchors[[a, k]] + (if k % 2 == 0 { x } else { y }) as f32 * stride as f32;
             }
 
             let decoded = delta2box(&deltas, &anchor, (w, h), stride as f32);

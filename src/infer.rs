@@ -54,16 +54,22 @@ impl Infer {
     pub fn infer(&mut self, array: Array3<u8>) -> Result<Vec<post::Box>, ort::Error> {
         let input_name = self.session.inputs[0].name.clone();
         // let output_name = self.session.outputs[0].name.clone();
-        let stacked = array
-            .slice(s![.., ..480, ..640])
-            .as_standard_layout()
-            .mapv(|v| v as f32)
-            .insert_axis(Axis(0));
-        let outputs = self
-            .session
-            .run(ort::inputs![input_name => TensorRef::from_array_view(&stacked)?])?;
+        let img = array
+            .slice(s![.., 80..560, ..640])
+            .mapv(|v| (v as f32) / 255.0)
+            .reversed_axes();
+
+        // Normalize pixels
+        let mean = ndarray::arr1(&[0.485, 0.456, 0.406]);
+        let std = ndarray::arr1(&[0.229, 0.224, 0.225]);
+        let img = (img - mean) / std;
+
+        let stacked = img.reversed_axes().insert_axis(Axis(0));
+
+        let outputs = self.session.run(
+            ort::inputs![input_name => TensorRef::from_array_view(&stacked.as_standard_layout())?],
+        )?;
         let output = post::retinanet(outputs);
-        // Ok(outputs[output_name].try_extract_tensor::<f32>()?.1.to_vec())
         Ok(output)
     }
 }
@@ -84,8 +90,8 @@ pub fn image_to_ndarray3(image: Image) -> Array3<u8> {
 
 pub fn ndarray3_to_image(array: Array3<u8>) -> Image {
     let shape = array.shape();
-    let width = shape[1];
-    let height = shape[2];
+    let width = shape[2];
+    let height = shape[1];
     let arr = array.permuted_axes((1, 2, 0));
     image::ImageBuffer::from_raw(
         width as u32,
@@ -116,12 +122,12 @@ fn resize_padded(img: Image, target_size: u32) -> Image {
 fn test_infer() {
     let mut model = Infer::new("./retinanet-9.onnx").unwrap();
     let inference = model
-        .infer_image(image::open("./output/0.0.png").unwrap())
+        .infer_image(image::open("./test.JPEG").unwrap())
         .unwrap();
-    println!("{}", inference.len());
+    println!("Length: {}", inference.len());
     inference
         .iter()
-        .filter(|b| b.bounds.iter().any(|&a| a > 0))
+        .filter(|b| b.bounds.iter().any(|&v| v > 0))
         .for_each(|b| {
             println!("{b:?}");
         });
