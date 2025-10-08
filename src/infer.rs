@@ -119,4 +119,10 @@ fn test_infer() {
         .infer_image(image::open("./output/0.0.png").unwrap())
         .unwrap();
     println!("{}", inference.len());
+    inference
+        .iter()
+        .filter(|b| b.bounds.iter().any(|&a| a > 0))
+        .for_each(|b| {
+            println!("{b:?}");
+        });
 }

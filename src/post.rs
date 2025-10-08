@@ -3,10 +3,11 @@ use std::collections::BTreeMap;
 use ndarray::{Array, Array1, Array2, Array3, Array4, Axis, Ix4, concatenate, s};
 use ort::{session::SessionOutputs, value::Tensor};
 
+#[derive(Debug)]
 pub struct Box {
-    bounds: [f32; 4],
-    score: f32,
-    label: f32,
+    pub bounds: [u32; 4],
+    pub score: f32,
+    pub label: i32,
 }
 
 pub fn retinanet(output: SessionOutputs) -> Vec<Box> {
@@ -54,13 +55,20 @@ pub fn retinanet(output: SessionOutputs) -> Vec<Box> {
     let all_boxes = concatenate(Axis(1), &all_boxes).unwrap();
     let all_classes = concatenate(Axis(1), &all_classes).unwrap();
     let (scores, boxes, labels) = nms(&all_scores, &all_boxes, &all_classes, 0.5, 100);
-    println!(
-        "scores: {:?}, boxes: {:?}, labels: {:?}",
-        scores.shape(),
-        boxes.shape(),
-        labels.shape()
-    );
-    todo!();
+    let mut bboxes = Vec::with_capacity(100);
+    for i in 0..100 {
+        bboxes.push(Box {
+            bounds: [
+                (boxes[(0, i, 0)]).ceil() as u32,
+                (boxes[(0, i, 1)]).ceil() as u32,
+                (boxes[(0, i, 2)]).ceil() as u32,
+                (boxes[(0, i, 3)]).ceil() as u32,
+            ],
+            score: scores[(0, i)],
+            label: labels[(0, i)],
+        });
+    }
+    bboxes
 }
 
 /// Generate anchors coordinates [x1, y1, x2, y2] from stride, ratios, and scales
