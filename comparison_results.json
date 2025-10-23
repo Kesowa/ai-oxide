@@ -1,0 +1,908 @@
+{
+    "onnx_total_boxes": 453,
+    "rust_total_boxes": 100,
+    "overlap_count": 93,
+    "differences": [
+        {
+            "rust_box": [
+                183,
+                87,
+                521,
+                396
+            ],
+            "max_iou_with_onnx": 0.691
+        },
+        {
+            "rust_box": [
+                84,
+                25,
+                613,
+                511
+            ],
+            "max_iou_with_onnx": 0.719
+        },
+        {
+            "rust_box": [
+                208,
+                86,
+                547,
+                394
+            ],
+            "max_iou_with_onnx": 0.659
+        },
+        {
+            "rust_box": [
+                87,
+                9,
+                622,
+                488
+            ],
+            "max_iou_with_onnx": 0.766
+        },
+        {
+            "rust_box": [
+                84,
+                25,
+                613,
+                511
+            ],
+            "max_iou_with_onnx": 0.719
+        },
+        {
+            "rust_box": [
+                85,
+                6,
+                627,
+                475
+            ],
+            "max_iou_with_onnx": 0.786
+        },
+        {
+            "rust_box": [
+                84,
+                25,
+                613,
+                511
+            ],
+            "max_iou_with_onnx": 0.719
+        },
+        {
+            "rust_box": [
+                78,
+                0,
+                636,
+                511
+            ],
+            "max_iou_with_onnx": 0.745
+        },
+        {
+            "rust_box": [
+                208,
+                86,
+                547,
+                394
+            ],
+            "max_iou_with_onnx": 0.659
+        },
+        {
+            "rust_box": [
+                84,
+                25,
+                613,
+                511
+            ],
+            "max_iou_with_onnx": 0.719
+        },
+        {
+            "rust_box": [
+                84,
+                25,
+                613,
+                511
+            ],
+            "max_iou_with_onnx": 0.719
+        },
+        {
+            "rust_box": [
+                208,
+                86,
+                547,
+                394
+            ],
+            "max_iou_with_onnx": 0.659
+        },
+        {
+            "rust_box": [
+                208,
+                86,
+                547,
+                394
+            ],
+            "max_iou_with_onnx": 0.659
+        },
+        {
+            "rust_box": [
+                180,
+                107,
+                521,
+                421
+            ],
+            "max_iou_with_onnx": 0.777
+        },
+        {
+            "rust_box": [
+                84,
+                25,
+                613,
+                511
+            ],
+            "max_iou_with_onnx": 0.719
+        },
+        {
+            "rust_box": [
+                0,
+                0,
+                639,
+                511
+            ],
+            "max_iou_with_onnx": 0.726
+        },
+        {
+            "rust_box": [
+                84,
+                25,
+                613,
+                511
+            ],
+            "max_iou_with_onnx": 0.719
+        },
+        {
+            "rust_box": [
+                208,
+                86,
+                547,
+                394
+            ],
+            "max_iou_with_onnx": 0.659
+        },
+        {
+            "rust_box": [
+                293,
+                196,
+                639,
+                511
+            ],
+            "max_iou_with_onnx": 0.592
+        },
+        {
+            "rust_box": [
+                293,
+                196,
+                639,
+                511
+            ],
+            "max_iou_with_onnx": 0.592
+        },
+        {
+            "rust_box": [
+                293,
+                196,
+                639,
+                511
+            ],
+            "max_iou_with_onnx": 0.592
+        },
+        {
+            "rust_box": [
+                293,
+                196,
+                639,
+                511
+            ],
+            "max_iou_with_onnx": 0.592
+        },
+        {
+            "rust_box": [
+                0,
+                21,
+                639,
+                511
+            ],
+            "max_iou_with_onnx": 0.694
+        },
+        {
+            "rust_box": [
+                293,
+                196,
+                639,
+                511
+            ],
+            "max_iou_with_onnx": 0.592
+        },
+        {
+            "rust_box": [
+                75,
+                102,
+                639,
+                511
+            ],
+            "max_iou_with_onnx": 0.713
+        },
+        {
+            "rust_box": [
+                293,
+                196,
+                639,
+                511
+            ],
+            "max_iou_with_onnx": 0.592
+        },
+        {
+            "rust_box": [
+                293,
+                196,
+                639,
+                511
+            ],
+            "max_iou_with_onnx": 0.592
+        },
+        {
+            "rust_box": [
+                84,
+                25,
+                613,
+                511
+            ],
+            "max_iou_with_onnx": 0.719
+        },
+        {
+            "rust_box": [
+                0,
+                0,
+                639,
+                511
+            ],
+            "max_iou_with_onnx": 0.726
+        },
+        {
+            "rust_box": [
+                293,
+                196,
+                639,
+                511
+            ],
+            "max_iou_with_onnx": 0.592
+        },
+        {
+            "rust_box": [
+                75,
+                102,
+                639,
+                511
+            ],
+            "max_iou_with_onnx": 0.713
+        },
+        {
+            "rust_box": [
+                180,
+                107,
+                521,
+                421
+            ],
+            "max_iou_with_onnx": 0.777
+        },
+        {
+            "rust_box": [
+                203,
+                103,
+                547,
+                420
+            ],
+            "max_iou_with_onnx": 0.746
+        },
+        {
+            "rust_box": [
+                7,
+                202,
+                461,
+                511
+            ],
+            "max_iou_with_onnx": 0.702
+        },
+        {
+            "rust_box": [
+                206,
+                194,
+                639,
+                511
+            ],
+            "max_iou_with_onnx": 0.648
+        },
+        {
+            "rust_box": [
+                293,
+                196,
+                639,
+                511
+            ],
+            "max_iou_with_onnx": 0.592
+        },
+        {
+            "rust_box": [
+                293,
+                196,
+                639,
+                511
+            ],
+            "max_iou_with_onnx": 0.592
+        },
+        {
+            "rust_box": [
+                84,
+                25,
+                613,
+                511
+            ],
+            "max_iou_with_onnx": 0.719
+        },
+        {
+            "rust_box": [
+                0,
+                0,
+                639,
+                511
+            ],
+            "max_iou_with_onnx": 0.726
+        },
+        {
+            "rust_box": [
+                206,
+                194,
+                639,
+                511
+            ],
+            "max_iou_with_onnx": 0.648
+        },
+        {
+            "rust_box": [
+                84,
+                25,
+                613,
+                511
+            ],
+            "max_iou_with_onnx": 0.719
+        },
+        {
+            "rust_box": [
+                293,
+                196,
+                639,
+                511
+            ],
+            "max_iou_with_onnx": 0.592
+        },
+        {
+            "rust_box": [
+                203,
+                103,
+                547,
+                420
+            ],
+            "max_iou_with_onnx": 0.746
+        },
+        {
+            "rust_box": [
+                84,
+                25,
+                613,
+                511
+            ],
+            "max_iou_with_onnx": 0.719
+        },
+        {
+            "rust_box": [
+                75,
+                102,
+                639,
+                511
+            ],
+            "max_iou_with_onnx": 0.713
+        },
+        {
+            "rust_box": [
+                293,
+                196,
+                639,
+                511
+            ],
+            "max_iou_with_onnx": 0.592
+        },
+        {
+            "rust_box": [
+                0,
+                141,
+                639,
+                511
+            ],
+            "max_iou_with_onnx": 0.735
+        },
+        {
+            "rust_box": [
+                208,
+                86,
+                547,
+                394
+            ],
+            "max_iou_with_onnx": 0.659
+        },
+        {
+            "rust_box": [
+                7,
+                202,
+                461,
+                511
+            ],
+            "max_iou_with_onnx": 0.702
+        },
+        {
+            "rust_box": [
+                7,
+                202,
+                461,
+                511
+            ],
+            "max_iou_with_onnx": 0.702
+        },
+        {
+            "rust_box": [
+                293,
+                196,
+                639,
+                511
+            ],
+            "max_iou_with_onnx": 0.592
+        },
+        {
+            "rust_box": [
+                7,
+                202,
+                461,
+                511
+            ],
+            "max_iou_with_onnx": 0.702
+        },
+        {
+            "rust_box": [
+                23,
+                92,
+                639,
+                511
+            ],
+            "max_iou_with_onnx": 0.695
+        },
+        {
+            "rust_box": [
+                208,
+                86,
+                547,
+                394
+            ],
+            "max_iou_with_onnx": 0.659
+        },
+        {
+            "rust_box": [
+                208,
+                86,
+                547,
+                394
+            ],
+            "max_iou_with_onnx": 0.659
+        },
+        {
+            "rust_box": [
+                75,
+                102,
+                639,
+                511
+            ],
+            "max_iou_with_onnx": 0.713
+        },
+        {
+            "rust_box": [
+                7,
+                202,
+                461,
+                511
+            ],
+            "max_iou_with_onnx": 0.702
+        },
+        {
+            "rust_box": [
+                285,
+                0,
+                639,
+                436
+            ],
+            "max_iou_with_onnx": 0.51
+        },
+        {
+            "rust_box": [
+                208,
+                86,
+                547,
+                394
+            ],
+            "max_iou_with_onnx": 0.659
+        },
+        {
+            "rust_box": [
+                0,
+                141,
+                639,
+                511
+            ],
+            "max_iou_with_onnx": 0.735
+        },
+        {
+            "rust_box": [
+                0,
+                0,
+                639,
+                511
+            ],
+            "max_iou_with_onnx": 0.726
+        },
+        {
+            "rust_box": [
+                293,
+                196,
+                639,
+                511
+            ],
+            "max_iou_with_onnx": 0.592
+        },
+        {
+            "rust_box": [
+                293,
+                196,
+                639,
+                511
+            ],
+            "max_iou_with_onnx": 0.592
+        },
+        {
+            "rust_box": [
+                0,
+                141,
+                639,
+                511
+            ],
+            "max_iou_with_onnx": 0.735
+        },
+        {
+            "rust_box": [
+                290,
+                189,
+                639,
+                511
+            ],
+            "max_iou_with_onnx": 0.586
+        },
+        {
+            "rust_box": [
+                0,
+                0,
+                639,
+                511
+            ],
+            "max_iou_with_onnx": 0.726
+        },
+        {
+            "rust_box": [
+                0,
+                0,
+                639,
+                511
+            ],
+            "max_iou_with_onnx": 0.726
+        },
+        {
+            "rust_box": [
+                293,
+                196,
+                639,
+                511
+            ],
+            "max_iou_with_onnx": 0.592
+        },
+        {
+            "rust_box": [
+                285,
+                0,
+                639,
+                436
+            ],
+            "max_iou_with_onnx": 0.51
+        },
+        {
+            "rust_box": [
+                293,
+                196,
+                639,
+                511
+            ],
+            "max_iou_with_onnx": 0.592
+        },
+        {
+            "rust_box": [
+                0,
+                141,
+                639,
+                511
+            ],
+            "max_iou_with_onnx": 0.735
+        },
+        {
+            "rust_box": [
+                293,
+                196,
+                639,
+                511
+            ],
+            "max_iou_with_onnx": 0.592
+        },
+        {
+            "rust_box": [
+                0,
+                0,
+                639,
+                511
+            ],
+            "max_iou_with_onnx": 0.726
+        },
+        {
+            "rust_box": [
+                7,
+                202,
+                461,
+                511
+            ],
+            "max_iou_with_onnx": 0.702
+        },
+        {
+            "rust_box": [
+                293,
+                196,
+                639,
+                511
+            ],
+            "max_iou_with_onnx": 0.592
+        },
+        {
+            "rust_box": [
+                75,
+                102,
+                639,
+                511
+            ],
+            "max_iou_with_onnx": 0.713
+        },
+        {
+            "rust_box": [
+                293,
+                196,
+                639,
+                511
+            ],
+            "max_iou_with_onnx": 0.592
+        },
+        {
+            "rust_box": [
+                497,
+                263,
+                639,
+                511
+            ],
+            "max_iou_with_onnx": 0.245
+        },
+        {
+            "rust_box": [
+                0,
+                141,
+                639,
+                511
+            ],
+            "max_iou_with_onnx": 0.735
+        },
+        {
+            "rust_box": [
+                293,
+                196,
+                639,
+                511
+            ],
+            "max_iou_with_onnx": 0.592
+        },
+        {
+            "rust_box": [
+                293,
+                196,
+                639,
+                511
+            ],
+            "max_iou_with_onnx": 0.592
+        },
+        {
+            "rust_box": [
+                7,
+                202,
+                461,
+                511
+            ],
+            "max_iou_with_onnx": 0.702
+        },
+        {
+            "rust_box": [
+                7,
+                202,
+                461,
+                511
+            ],
+            "max_iou_with_onnx": 0.702
+        },
+        {
+            "rust_box": [
+                293,
+                196,
+                639,
+                511
+            ],
+            "max_iou_with_onnx": 0.592
+        },
+        {
+            "rust_box": [
+                285,
+                0,
+                639,
+                436
+            ],
+            "max_iou_with_onnx": 0.51
+        },
+        {
+            "rust_box": [
+                75,
+                102,
+                639,
+                511
+            ],
+            "max_iou_with_onnx": 0.713
+        },
+        {
+            "rust_box": [
+                293,
+                196,
+                639,
+                511
+            ],
+            "max_iou_with_onnx": 0.592
+        },
+        {
+            "rust_box": [
+                84,
+                25,
+                613,
+                511
+            ],
+            "max_iou_with_onnx": 0.719
+        },
+        {
+            "rust_box": [
+                300,
+                9,
+                639,
+                511
+            ],
+            "max_iou_with_onnx": 0.516
+        },
+        {
+            "rust_box": [
+                208,
+                86,
+                547,
+                394
+            ],
+            "max_iou_with_onnx": 0.659
+        },
+        {
+            "rust_box": [
+                293,
+                196,
+                639,
+                511
+            ],
+            "max_iou_with_onnx": 0.592
+        },
+        {
+            "rust_box": [
+                494,
+                248,
+                639,
+                511
+            ],
+            "max_iou_with_onnx": 0.265
+        },
+        {
+            "rust_box": [
+                293,
+                196,
+                639,
+                511
+            ],
+            "max_iou_with_onnx": 0.592
+        },
+        {
+            "rust_box": [
+                71,
+                354,
+                639,
+                511
+            ],
+            "max_iou_with_onnx": 0.439
+        },
+        {
+            "rust_box": [
+                495,
+                366,
+                639,
+                511
+            ],
+            "max_iou_with_onnx": 0.147
+        },
+        {
+            "rust_box": [
+                495,
+                366,
+                639,
+                511
+            ],
+            "max_iou_with_onnx": 0.147
+        },
+        {
+            "rust_box": [
+                7,
+                202,
+                461,
+                511
+            ],
+            "max_iou_with_onnx": 0.702
+        },
+        {
+            "rust_box": [
+                495,
+                366,
+                639,
+                511
+            ],
+            "max_iou_with_onnx": 0.147
+        },
+        {
+            "rust_box": [
+                364,
+                349,
+                639,
+                511
+            ],
+            "max_iou_with_onnx": 0.334
+        },
+        {
+            "rust_box": [
+                75,
+                102,
+                639,
+                511
+            ],
+            "max_iou_with_onnx": 0.713
+        }
+    ],
+    "overlap_ratio": 0.93
+}

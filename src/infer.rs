@@ -5,6 +5,16 @@ use ort::{
     session::{Session, builder::GraphOptimizationLevel},
     value::TensorRef,
 };
+use std::fs::File;
+use std::io::Write;
+use serde::Serialize;
+
+#[derive(Serialize)]
+struct Detection {
+    bounds: [i32; 4],
+    score: f32,
+    label: i32,
+}
 
 use crate::post;
 
@@ -122,13 +132,26 @@ fn resize_padded(img: Image, target_size: u32) -> Image {
 fn test_infer() {
     let mut model = Infer::new("./retinanet-9.onnx").unwrap();
     let inference = model
-        .infer_image(image::open("./test.JPEG").unwrap())
+        .infer_image(image::open("./test4.png").unwrap())
         .unwrap();
+
     println!("Length: {}", inference.len());
-    inference
+
+    let detections: Vec<Detection> = inference
         .iter()
         .filter(|b| b.bounds.iter().any(|&v| v > 0))
-        .for_each(|b| {
-            println!("{b:?}");
-        });
+        .map(|b| Detection {
+            bounds: [b.bounds[0].try_into().unwrap(), b.bounds[1].try_into().unwrap(), b.bounds[2].try_into().unwrap(), b.bounds[3].try_into().unwrap()],
+            score: b.score,
+            label: b.label,
+        })
+        .collect();
+
+    // --- Write to JSON file ---
+    let json_path = "./rust_output.json";
+    let json_str = serde_json::to_string_pretty(&detections).unwrap();
+    let mut file = File::create(json_path).unwrap();
+    file.write_all(json_str.as_bytes()).unwrap();
+
+    println!("✅ Saved {} detections to {}", detections.len(), json_path);
 }
