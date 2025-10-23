@@ -10,8 +10,7 @@ pub struct Box {
     pub label: i32,
 }
 
-pub fn retinanet(output: SessionOutputs) -> Vec<Box> {
-    let img_height = 640;
+pub fn retinanet(img_shape: &[usize], output: SessionOutputs) -> Vec<Box> {
     let ratio_vals = [1.0, 2.0, 0.5];
     let scales_vals = (0..3)
         .map(|i| 4. * 2.0f32.powf(i as f32 / 3.))
@@ -29,7 +28,8 @@ pub fn retinanet(output: SessionOutputs) -> Vec<Box> {
     let mut anchors = BTreeMap::new();
     let mut decoded = Vec::with_capacity(cls_heads.len());
     for (cls_head, reg_head) in cls_heads.iter().zip(reg_heads.iter()) {
-        let stride = img_height / cls_head.shape().last().unwrap();
+        let stride = img_shape.iter().rev().skip(1).next().unwrap()
+            / cls_head.shape().iter().rev().skip(1).next().unwrap();
         if anchors.get(&stride).is_none() {
             anchors.insert(
                 stride,

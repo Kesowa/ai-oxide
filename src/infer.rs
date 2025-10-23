@@ -1,5 +1,5 @@
 use image::{DynamicImage, ImageBuffer, Rgb, flat::SampleLayout, imageops::FilterType};
-use ndarray::{Array3, Axis, ShapeBuilder, s};
+use ndarray::{Array3, Axis, ShapeBuilder};
 use ort::{
     execution_providers::CPUExecutionProvider,
     session::{Session, builder::GraphOptimizationLevel},
@@ -10,7 +10,7 @@ use crate::post;
 
 pub struct Infer {
     session: Session,
-    input_size: u32,
+    input_size: (u32, u32),
 }
 
 pub type Image = ImageBuffer<Rgb<u8>, Vec<u8>>;
@@ -32,7 +32,7 @@ impl Infer {
             && shape[1] == 3
         // && shape[2] == shape[3]
         {
-            input_size = shape[2].max(shape[3]) as u32;
+            input_size = (shape[3] as u32, shape[2] as u32);
         } else {
             return Err(ort::Error::new_with_code(
                 ort::ErrorCode::GenericFailure,
@@ -55,9 +55,11 @@ impl Infer {
         let input_name = self.session.inputs[0].name.clone();
         // let output_name = self.session.outputs[0].name.clone();
         let img = array
-            .slice(s![.., 80..560, ..640])
+            // .slice(s![.., ..640, ..480])
             .mapv(|v| (v as f32) / 255.0)
             .reversed_axes();
+
+        let img_shape = img.shape().to_vec();
 
         // Normalize pixels
         let mean = ndarray::arr1(&[0.485, 0.456, 0.406]);
@@ -69,7 +71,7 @@ impl Infer {
         let outputs = self.session.run(
             ort::inputs![input_name => TensorRef::from_array_view(&stacked.as_standard_layout())?],
         )?;
-        let output = post::retinanet(outputs);
+        let output = post::retinanet(&img_shape, outputs);
         Ok(output)
     }
 }
@@ -101,34 +103,140 @@ pub fn ndarray3_to_image(array: Array3<u8>) -> Image {
     .unwrap()
 }
 
-fn resize_padded(img: Image, target_size: u32) -> Image {
-    let width = img.width();
-    let height = img.height();
-    let max_dim = width.max(height);
-    let pad_left = (max_dim - width) / 2;
-    let pad_top = (max_dim - height) / 2;
+fn resize_padded(img: Image, target_size: (u32, u32)) -> Image {
+    let original_width = img.width() as f32;
+    let original_height = img.height() as f32;
+    let target_width = target_size.0 as f32;
+    let target_height = target_size.1 as f32;
 
-    let mut padded = ImageBuffer::from_pixel(max_dim, max_dim, Rgb([255, 255, 255]));
-    image::imageops::overlay(&mut padded, &img, pad_left.into(), pad_top.into());
+    let target_ratio = target_width / target_height;
+    let original_ratio = original_width / original_height;
 
-    if max_dim != target_size {
-        padded = image::imageops::resize(&padded, target_size, target_size, FilterType::CatmullRom);
-    }
+    let (new_width, new_height) = if original_ratio > target_ratio {
+        (target_width, target_width / original_ratio)
+    } else {
+        (target_height * original_ratio, target_height)
+    };
 
-    padded
+    let img_resized = image::imageops::resize(
+        &img,
+        new_width.round() as u32,
+        new_height.round() as u32,
+        FilterType::Lanczos3,
+    );
+
+    let pad_left = ((target_width - new_width) / 2.0).round() as i64;
+    let pad_top = ((target_height - new_height) / 2.0).round() as i64;
+
+    let mut new_img = ImageBuffer::from_pixel(target_size.0, target_size.1, Rgb([255, 255, 255]));
+
+    image::imageops::overlay(&mut new_img, &img_resized, pad_left, pad_top);
+
+    new_img
 }
 
 #[test]
 fn test_infer() {
+    static LABEL_MAP: [&str; 80] = [
+        "person",
+        "bicycle",
+        "car",
+        "motorcycle",
+        "airplane",
+        "bus",
+        "train",
+        "truck",
+        "boat",
+        "traffic light",
+        "fire hydrant",
+        "stop sign",
+        "parking meter",
+        "bench",
+        "bird",
+        "cat",
+        "dog",
+        "horse",
+        "sheep",
+        "cow",
+        "elephant",
+        "bear",
+        "zebra",
+        "giraffe",
+        "backpack",
+        "umbrella",
+        "handbag",
+        "tie",
+        "suitcase",
+        "frisbee",
+        "skis",
+        "snowboard",
+        "sports ball",
+        "kite",
+        "baseball bat",
+        "baseball glove",
+        "skateboard",
+        "surfboard",
+        "tennis racket",
+        "bottle",
+        "wine glass",
+        "cup",
+        "fork",
+        "knife",
+        "spoon",
+        "bowl",
+        "banana",
+        "apple",
+        "sandwich",
+        "orange",
+        "broccoli",
+        "carrot",
+        "hot dog",
+        "pizza",
+        "donut",
+        "cake",
+        "chair",
+        "couch",
+        "potted plant",
+        "bed",
+        "dining table",
+        "toilet",
+        "TV",
+        "laptop",
+        "mouse",
+        "remote",
+        "keyboard",
+        "cell phone",
+        "microwave",
+        "oven",
+        "toaster",
+        "sink",
+        "refrigerator",
+        "book",
+        "clock",
+        "vase",
+        "scissors",
+        "teddy bear",
+        "hair drier",
+        "and toothbrush",
+    ];
+
+    use imageproc::{drawing::draw_hollow_rect_mut, rect::Rect};
     let mut model = Infer::new("./retinanet-9.onnx").unwrap();
-    let inference = model
-        .infer_image(image::open("./test.JPEG").unwrap())
-        .unwrap();
-    println!("Length: {}", inference.len());
-    inference
-        .iter()
-        .filter(|b| b.bounds.iter().any(|&v| v > 0))
-        .for_each(|b| {
-            println!("{b:?}");
-        });
+    let img = image::open("./input.jpeg").unwrap();
+    let inference = model.infer_image(img.clone()).unwrap();
+    let mut img = resize_padded(img.into(), model.input_size);
+    for (i, item) in inference.iter().enumerate() {
+        if item.score < 0.1 || i > 3 {
+            break;
+        };
+        println!("{}: {:.2}", LABEL_MAP[item.label as usize], item.score);
+        println!("BBOX: {:?}", item.bounds);
+        let bbox = item.bounds;
+        draw_hollow_rect_mut(
+            &mut img,
+            Rect::at(bbox[0] as i32, bbox[1] as i32).of_size(bbox[2] - bbox[0], bbox[3] - bbox[1]),
+            image::Rgb([255u8, 0u8, 0u8]),
+        );
+    }
+    img.save("output.png").unwrap();
 }
