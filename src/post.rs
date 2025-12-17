@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use ndarray::{Array, Array1, Array2, Array3, Array4, Axis, Ix4, concatenate, s, stack};
+use ndarray::{Array, Array1, Array2, Array3, Array4, Axis, Ix4, concatenate, s};
 use ort::{session::SessionOutputs, value::Tensor};
 
 #[derive(Debug)]
@@ -81,26 +81,48 @@ pub fn retinanet(img_shape: &[usize], output: SessionOutputs) -> Vec<Box> {
 pub fn generate_anchors(stride: f32, ratio_vals: &[f32], scales_vals: &[f32]) -> Array2<f32> {
     let num_ratios = ratio_vals.len();
     let num_scales = scales_vals.len();
-    let total_anchors = num_ratios * num_scales;
+    let num_anchors = num_ratios * num_scales;
 
-    let mut scales = Array2::<f32>::zeros((total_anchors, 1));
-    for i in 0..total_anchors {
-        scales[[i, 0]] = scales_vals[i % num_scales];
+    let mut ratios = Vec::with_capacity(num_anchors);
+    let mut scales = Vec::with_capacity(num_anchors);
+    
+    for scale in scales_vals {
+        for ratio in ratio_vals {
+            scales.push(*scale);
+            ratios.push(*ratio);
+        }
+    }
+    
+    let ratios = Array1::from(ratios);
+    let scales = Array1::from(scales);
+
+    // Base box size = stride x stride
+    let wh = stride;
+
+    // Compute widths and heights per anchor
+    let ws = ratios.mapv(|r| (wh * wh / r).sqrt());
+    let hs = &ws * &ratios;
+
+    // Apply scales
+    let ws_scaled = &ws * &scales;
+    let hs_scaled = &hs * &scales;
+
+    // Compute x1,y1,x2,y2 (centered at stride/2, stride/2)
+    let x1 = (wh - &ws_scaled) * 0.5;
+    let y1 = (wh - &hs_scaled) * 0.5;
+    let x2 = (wh + &ws_scaled) * 0.5;
+    let y2 = (wh + &hs_scaled) * 0.5;
+
+    // Stack into [num_anchors, 4]
+    let mut anchors = Array2::<f32>::zeros((num_anchors, 4));
+    for i in 0..num_anchors {
+        anchors[[i, 0]] = x1[i];
+        anchors[[i, 1]] = y1[i];
+        anchors[[i, 2]] = x2[i];
+        anchors[[i, 3]] = y2[i];
     }
 
-    let mut ratios = Array1::<f32>::zeros(total_anchors);
-    for i in 0..total_anchors {
-        ratios[i] = ratio_vals[i / num_scales];
-    }
-
-    let wh = Array1::from(vec![stride; total_anchors]);
-    let ws = (&wh * &wh / &ratios).mapv(f32::sqrt);
-    let dwh = stack![Axis(1), ws, &ws * &ratios];
-    
-    let xy1 = 0.5 * (&wh.clone().insert_axis(Axis(1)) - &dwh * &scales);
-    let xy2 = 0.5 * (&wh.insert_axis(Axis(1)) + &dwh * &scales);
-    
-    concatenate![Axis(1), xy1, xy2]
+    anchors
 }
 
 #[cfg(test)]
@@ -110,8 +132,8 @@ mod tests {
     #[test]
     fn test_generate_anchors() {
         let stride = 32.0;
-        let ratios = vec![0.5, 1.0, 2.0];
-        let scales = vec![1.0, 2.0];
+        let ratios = vec![1.0, 2.0, 0.5];
+        let scales = vec![4.0 * 2.0f32.powf(0.0/3.0), 4.0 * 2.0f32.powf(1.0/3.0), 4.0 * 2.0f32.powf(2.0/3.0)];
 
         let anchors = generate_anchors(stride, &ratios, &scales);
         println!("{:?}", anchors);
@@ -119,8 +141,6 @@ mod tests {
         assert_eq!(anchors.shape(), &[ratios.len() * scales.len(), 4]);
     }
 }
-
-// src/decode.rs
 
 /// Convert deltas from anchors to boxes
 pub fn delta2box(
@@ -155,19 +175,16 @@ pub fn delta2box(
 
         let mut x1 = pred_ctr_x - 0.5 * pred_w;
         let mut y1 = pred_ctr_y - 0.5 * pred_h;
-        let mut x2 = pred_ctr_x + 0.5 * pred_w - 1.0;  
-        let mut y2 = pred_ctr_y + 0.5 * pred_h - 1.0; 
+        let mut x2 = pred_ctr_x + 0.5 * pred_w - 1.0;
+        let mut y2 = pred_ctr_y + 0.5 * pred_h - 1.0;
 
-        let m = 0.0;
-        let m_w = (size.0 as f32) * stride - 1.0;
-        let m_h = (size.1 as f32) * stride - 1.0;
-        
-        let clamp = |t: f32, max_val: f32| t.max(m).min(max_val);
-        
-        x1 = clamp(x1, m_w);
-        y1 = clamp(y1, m_h);
-        x2 = clamp(x2, m_w);
-        y2 = clamp(y2, m_h);
+        // Clamp
+        let max_w = (size.0 as f32) * stride - 1.0;
+        let max_h = (size.1 as f32) * stride - 1.0;
+        x1 = x1.clamp(0.0, max_w);
+        y1 = y1.clamp(0.0, max_h);
+        x2 = x2.clamp(0.0, max_w);
+        y2 = y2.clamp(0.0, max_h);
 
         boxes[[i, 0]] = x1;
         boxes[[i, 1]] = y1;
@@ -232,10 +249,13 @@ pub fn decode(
         // Gather
         for (rank, idx) in topk.iter().enumerate() {
             let score = cls_flat[*idx];
-            let class_id = ((*idx / (h * w)) % num_classes) as i32;
+
+            let c = *idx / (h * w);
+            let a = c / num_classes; 
+            let class_id = (c % num_classes) as i32;
+            
             let x = (*idx % w) as i32;
             let y = ((*idx / w) % h) as i32;
-            let a = (*idx / (num_classes * h * w)) as usize;
 
             // Fetch box deltas [4]
             let mut deltas = Array2::<f32>::zeros((1, 4));
@@ -243,7 +263,7 @@ pub fn decode(
                 deltas[[0, k]] = box_flat[[a * 4 + k, y as usize, x as usize]];
             }
 
-            // Anchor
+            // Anchor - add grid offset
             let mut anchor = Array2::<f32>::zeros((1, 4));
             for k in 0..4 {
                 anchor[[0, k]] =
