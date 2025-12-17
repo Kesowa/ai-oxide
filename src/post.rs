@@ -83,43 +83,28 @@ pub fn generate_anchors(stride: f32, ratio_vals: &[f32], scales_vals: &[f32]) ->
     let num_scales = scales_vals.len();
     let num_anchors = num_ratios * num_scales;
 
-    let mut ratios = Vec::with_capacity(num_anchors);
-    let mut scales = Vec::with_capacity(num_anchors);
-    
-    for scale in scales_vals {
-        for ratio in ratio_vals {
-            scales.push(*scale);
-            ratios.push(*ratio);
-        }
-    }
-    
-    let ratios = Array1::from(ratios);
-    let scales = Array1::from(scales);
-
-    // Base box size = stride x stride
-    let wh = stride;
-
-    // Compute widths and heights per anchor
-    let ws = ratios.mapv(|r| (wh * wh / r).sqrt());
-    let hs = &ws * &ratios;
-
-    // Apply scales
-    let ws_scaled = &ws * &scales;
-    let hs_scaled = &hs * &scales;
-
-    // Compute x1,y1,x2,y2 (centered at stride/2, stride/2)
-    let x1 = (wh - &ws_scaled) * 0.5;
-    let y1 = (wh - &hs_scaled) * 0.5;
-    let x2 = (wh + &ws_scaled) * 0.5;
-    let y2 = (wh + &hs_scaled) * 0.5;
-
-    // Stack into [num_anchors, 4]
     let mut anchors = Array2::<f32>::zeros((num_anchors, 4));
-    for i in 0..num_anchors {
-        anchors[[i, 0]] = x1[i];
-        anchors[[i, 1]] = y1[i];
-        anchors[[i, 2]] = x2[i];
-        anchors[[i, 3]] = y2[i];
+    
+    let mut idx = 0;
+    for &scale in scales_vals {
+        for &ratio in ratio_vals {
+            let ws = (stride * stride / ratio).sqrt();
+            let hs = ws * ratio;
+            
+            let ws_scaled = ws * scale;
+            let hs_scaled = hs * scale;
+            
+            let x1 = (stride - ws_scaled) * 0.5;
+            let y1 = (stride - hs_scaled) * 0.5;
+            let x2 = (stride + ws_scaled) * 0.5;
+            let y2 = (stride + hs_scaled) * 0.5;
+            
+            anchors[[idx, 0]] = x1;
+            anchors[[idx, 1]] = y1;
+            anchors[[idx, 2]] = x2;
+            anchors[[idx, 3]] = y2;
+            idx += 1;
+        }
     }
 
     anchors
@@ -132,8 +117,8 @@ mod tests {
     #[test]
     fn test_generate_anchors() {
         let stride = 32.0;
-        let ratios = vec![1.0, 2.0, 0.5];
-        let scales = vec![4.0 * 2.0f32.powf(0.0/3.0), 4.0 * 2.0f32.powf(1.0/3.0), 4.0 * 2.0f32.powf(2.0/3.0)];
+        let ratios = vec![0.5, 1.0, 2.0];
+        let scales = vec![1.0, 2.0];
 
         let anchors = generate_anchors(stride, &ratios, &scales);
         println!("{:?}", anchors);
@@ -141,6 +126,8 @@ mod tests {
         assert_eq!(anchors.shape(), &[ratios.len() * scales.len(), 4]);
     }
 }
+
+// src/decode.rs
 
 /// Convert deltas from anchors to boxes
 pub fn delta2box(
@@ -249,11 +236,9 @@ pub fn decode(
         // Gather
         for (rank, idx) in topk.iter().enumerate() {
             let score = cls_flat[*idx];
-
             let c = *idx / (h * w);
-            let a = c / num_classes; 
+            let a = c / num_classes;
             let class_id = (c % num_classes) as i32;
-            
             let x = (*idx % w) as i32;
             let y = ((*idx / w) % h) as i32;
 
@@ -263,7 +248,7 @@ pub fn decode(
                 deltas[[0, k]] = box_flat[[a * 4 + k, y as usize, x as usize]];
             }
 
-            // Anchor - add grid offset
+            // Anchor
             let mut anchor = Array2::<f32>::zeros((1, 4));
             for k in 0..4 {
                 anchor[[0, k]] =
