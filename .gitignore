@@ -2,3 +2,13 @@
 *.zip
 /test/node_modules
 /test2
+*.onnx
+*.png
+*.jpeg
+*.jpg
+*.JPG
+*.JPEG
+*.tif
+*.tiff
+*.xml
+*.txt
