@@ -7,7 +7,7 @@ use tracing::{error, info};
 
 pub mod geotiff;
 pub mod infer;
-pub mod post;
+pub mod model;
 pub mod telemetry;
 pub mod utils;
 pub mod vod;

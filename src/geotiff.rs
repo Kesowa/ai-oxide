@@ -1,10 +1,10 @@
 use gdal::spatial_ref::CoordTransform;
 use gdal::spatial_ref::SpatialRef;
-use gdal::{raster::RasterBand, Dataset, Metadata};
-use ndarray::{s, Array3, Axis};
+use gdal::{Dataset, Metadata, raster::RasterBand};
+use ndarray::{Array3, Axis, s};
 use std::{collections::HashMap, path::Path};
 
-use crate::infer::ndarray3_to_image;
+use crate::model::utils::ndarray3_to_image;
 
 /* Set the following ENV Vars
 export GDAL_DISABLE_READDIR_ON_OPEN=EMPTY_DIR

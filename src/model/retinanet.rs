@@ -1,80 +1,129 @@
 use std::collections::BTreeMap;
 
+use image::DynamicImage;
 use ndarray::{Array, Array1, Array2, Array3, Array4, Axis, Ix4, concatenate, s};
-use ort::{session::SessionOutputs, value::Tensor};
+use ort::{session::Session, value::Tensor};
 
-#[derive(Debug)]
-pub struct Box {
+use crate::model::{
+    Model,
+    utils::{image_to_ndarray3, resize_padded},
+};
+
+pub struct BBox {
     pub bounds: [u32; 4],
     pub score: f32,
     pub label: i32,
 }
 
-pub fn retinanet(img_shape: &[usize], output: SessionOutputs) -> Vec<Box> {
-    let ratio_vals = [1.0, 2.0, 0.5];
-    let scales_vals = (0..3)
-        .map(|i| 4. * 2.0f32.powf(i as f32 / 3.))
-        .collect::<Vec<_>>();
-    let mut cls_heads = output
-        .into_iter()
-        .map(|(_, v)| {
-            let tensor: Tensor<f32> = v.downcast().unwrap();
-            let array = tensor.extract_array();
-            let array4 = array.into_dimensionality::<Ix4>().unwrap();
-            array4.to_owned()
-        })
-        .collect::<Vec<_>>();
-    let reg_heads = cls_heads.split_off(5);
-    let mut anchors = BTreeMap::new();
-    let mut decoded = Vec::with_capacity(cls_heads.len());
-    for (cls_head, reg_head) in cls_heads.iter().zip(reg_heads.iter()) {
-        let stride = img_shape.iter().rev().skip(1).next().unwrap()
-            / cls_head.shape().iter().rev().skip(1).next().unwrap();
-        if anchors.get(&stride).is_none() {
-            anchors.insert(
+pub struct Retinanet {
+    session: Session,
+}
+
+impl Model<f32, Ix4> for Retinanet {
+    const INPUT_SHAPE: [usize; 4] = [1, 3, 480, 640];
+
+    type Input = DynamicImage;
+
+    type Output = Vec<BBox>;
+
+    fn preprocess(input: Self::Input) -> Array<f32, Ix4> {
+        let resized = resize_padded(
+            input.into_rgb8(),
+            (Self::INPUT_SHAPE[3] as u32, Self::INPUT_SHAPE[2] as u32),
+        );
+        let array = image_to_ndarray3(resized);
+        let img = array
+            // .slice(s![.., ..640, ..480])
+            .mapv(|v| (v as f32) / 255.0)
+            .reversed_axes();
+
+        // Normalize pixels
+        let mean = ndarray::arr1(&[0.485, 0.456, 0.406]);
+        let std = ndarray::arr1(&[0.229, 0.224, 0.225]);
+        let img = (img - mean) / std;
+
+        let stacked = img.reversed_axes().insert_axis(Axis(0));
+        stacked
+    }
+
+    fn load(session: Session) -> Result<Retinanet, ort::Error> {
+        let input_shape = session.inputs[0].input_type.tensor_shape().unwrap();
+
+        assert_eq!(input_shape.to_vec(), Self::INPUT_SHAPE.map(|v| v as i64));
+
+        Ok(Self { session })
+    }
+
+    fn postprocess(output: ort::session::SessionOutputs) -> Self::Output {
+        let ratio_vals = [1.0, 2.0, 0.5];
+        let scales_vals = (0..3)
+            .map(|i| 4. * 2.0f32.powf(i as f32 / 3.))
+            .collect::<Vec<_>>();
+        let mut cls_heads = output
+            .into_iter()
+            .map(|(_, v)| {
+                let tensor: Tensor<f32> = v.downcast().unwrap();
+                let array = tensor.extract_array();
+                let array4 = array.into_dimensionality::<Ix4>().unwrap();
+                array4.to_owned()
+            })
+            .collect::<Vec<_>>();
+        let reg_heads = cls_heads.split_off(5);
+        let mut anchors = BTreeMap::new();
+        let mut decoded = Vec::with_capacity(cls_heads.len());
+        for (cls_head, reg_head) in cls_heads.iter().zip(reg_heads.iter()) {
+            // input height/width must match intended dimension
+            let stride = Self::INPUT_SHAPE[2] as usize
+                / cls_head.shape().iter().rev().skip(1).next().unwrap();
+            if anchors.get(&stride).is_none() {
+                anchors.insert(
+                    stride,
+                    generate_anchors(stride as f32, &ratio_vals, &scales_vals),
+                );
+            };
+            decoded.push(decode(
+                &cls_head,
+                &reg_head,
+                &anchors[&stride],
                 stride,
-                generate_anchors(stride as f32, &ratio_vals, &scales_vals),
-            );
-        };
-        decoded.push(decode(
-            &cls_head,
-            &reg_head,
-            &anchors[&stride],
-            stride,
-            0.05,
-            1000,
-        ));
+                0.05,
+                1000,
+            ));
+        }
+        let all_scores = concatenate(
+            Axis(1),
+            &decoded.iter().map(|d| d.0.view()).collect::<Vec<_>>(),
+        )
+        .unwrap();
+        let all_boxes = concatenate(
+            Axis(1),
+            &decoded.iter().map(|d| d.1.view()).collect::<Vec<_>>(),
+        )
+        .unwrap();
+        let all_classes = concatenate(
+            Axis(1),
+            &decoded.iter().map(|d| d.2.view()).collect::<Vec<_>>(),
+        )
+        .unwrap();
+        let (scores, boxes, labels) = nms(&all_scores, &all_boxes, &all_classes, 0.5, 100);
+        let mut bboxes = Vec::with_capacity(100);
+        for i in 0..100 {
+            bboxes.push(BBox {
+                bounds: [
+                    (boxes[(0, i, 0)]).ceil() as u32,
+                    (boxes[(0, i, 1)]).ceil() as u32,
+                    (boxes[(0, i, 2)]).ceil() as u32,
+                    (boxes[(0, i, 3)]).ceil() as u32,
+                ],
+                score: scores[(0, i)],
+                label: labels[(0, i)],
+            });
+        }
+        bboxes
     }
-    let all_scores = concatenate(
-        Axis(1),
-        &decoded.iter().map(|d| d.0.view()).collect::<Vec<_>>(),
-    )
-    .unwrap();
-    let all_boxes = concatenate(
-        Axis(1),
-        &decoded.iter().map(|d| d.1.view()).collect::<Vec<_>>(),
-    )
-    .unwrap();
-    let all_classes = concatenate(
-        Axis(1),
-        &decoded.iter().map(|d| d.2.view()).collect::<Vec<_>>(),
-    )
-    .unwrap();
-    let (scores, boxes, labels) = nms(&all_scores, &all_boxes, &all_classes, 0.5, 100);
-    let mut bboxes = Vec::with_capacity(100);
-    for i in 0..100 {
-        bboxes.push(Box {
-            bounds: [
-                (boxes[(0, i, 0)]).ceil() as u32,
-                (boxes[(0, i, 1)]).ceil() as u32,
-                (boxes[(0, i, 2)]).ceil() as u32,
-                (boxes[(0, i, 3)]).ceil() as u32,
-            ],
-            score: scores[(0, i)],
-            label: labels[(0, i)],
-        });
+    fn session(&mut self) -> &mut Session {
+        &mut self.session
     }
-    bboxes
 }
 
 /// Generate anchors coordinates [x1, y1, x2, y2] from stride, ratios, and scales
@@ -131,8 +180,6 @@ mod tests {
         assert_eq!(anchors.shape(), &[ratios.len() * scales.len(), 4]);
     }
 }
-
-// src/decode.rs
 
 /// Convert deltas from anchors to boxes
 pub fn delta2box(
