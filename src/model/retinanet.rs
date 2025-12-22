@@ -46,7 +46,7 @@ impl Model<f32, Ix4> for Retinanet {
         stacked
     }
 
-    fn load(session: Session) -> Result<Retinanet, ort::Error> {
+    fn load(session: Session) -> Result<Self, ort::Error> {
         let input_shape = session.inputs[0].input_type.tensor_shape().unwrap();
 
         assert_eq!(input_shape.to_vec(), Self::INPUT_SHAPE.map(|v| v as i64));
