@@ -4,7 +4,7 @@ use ndarray::Array;
 use ort::{
     execution_providers::CPUExecutionProvider,
     session::{Session, SessionOutputs, builder::GraphOptimizationLevel},
-    value::TensorRef,
+    value::Tensor,
 };
 
 pub mod utils;
@@ -51,9 +51,7 @@ where
         let input = Self::preprocess(input);
         let session = self.session();
         let input_name = session.inputs[0].name.clone();
-        let outputs = session.run(
-            ort::inputs![input_name => TensorRef::from_array_view(&input.as_standard_layout())?],
-        )?;
+        let outputs = session.run(ort::inputs![input_name => Tensor::from_array(input)?])?;
         let output = Self::postprocess(outputs);
         Ok(output)
     }

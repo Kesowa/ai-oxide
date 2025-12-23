@@ -128,6 +128,7 @@ mod test {
             Mobilenet::INPUT_SHAPE[2] as u32,
             Mobilenet::INPUT_SHAPE[1] as u32,
             inference
+                .permuted_axes((1, 0))
                 .flatten_with_order(ndarray::Order::RowMajor)
                 .to_vec(),
         )
