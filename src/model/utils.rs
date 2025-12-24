@@ -28,7 +28,7 @@ pub fn resize_padded(img: Image, target_size: (u32, u32)) -> Image {
     let pad_left = ((target_width - new_width) / 2.0).round() as i64;
     let pad_top = ((target_height - new_height) / 2.0).round() as i64;
 
-    let mut new_img = ImageBuffer::from_pixel(target_size.0, target_size.1, Rgb([255, 255, 255]));
+    let mut new_img = ImageBuffer::from_pixel(target_size.0, target_size.1, Rgb([127, 127, 127]));
 
     image::imageops::overlay(&mut new_img, &img_resized, pad_left, pad_top);
 

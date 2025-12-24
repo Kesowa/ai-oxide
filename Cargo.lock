@@ -85,6 +85,7 @@ dependencies = [
  "imageproc",
  "lapin",
  "ndarray",
+ "num-traits",
  "num_cpus",
  "object_store",
  "ort",

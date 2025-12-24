@@ -7,6 +7,7 @@ use ort::{
     value::Tensor,
 };
 
+pub mod clahe;
 pub mod utils;
 
 pub mod mobilenet;

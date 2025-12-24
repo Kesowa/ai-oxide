@@ -1,4 +1,3 @@
-use half::f16;
 use image::DynamicImage;
 use ndarray::{Array, Array2, Axis, Ix4};
 use ort::{session::Session, value::Tensor};
@@ -18,22 +17,20 @@ pub struct Mobilenet {
     session: Session,
 }
 
-impl Model<f16, Ix4> for Mobilenet {
+impl Model<f32, Ix4> for Mobilenet {
     const INPUT_SHAPE: [usize; 4] = [1, 512, 512, 3];
 
     type Input = DynamicImage;
 
     type Output = Array2<u8>;
 
-    fn preprocess(input: Self::Input) -> Array<f16, Ix4> {
+    fn preprocess(input: Self::Input) -> Array<f32, Ix4> {
         let resized = resize_padded(
             input.into_rgb8(),
             (Self::INPUT_SHAPE[2] as u32, Self::INPUT_SHAPE[1] as u32),
         );
         let array = image_to_ndarray3(resized);
-        let img = array
-            .mapv(|v| f16::from_f32((v as f32) / 255.0))
-            .reversed_axes();
+        let img = array.mapv(|v| (v as f32) / 255.0).reversed_axes();
 
         let stacked = img.insert_axis(Axis(0));
         stacked
@@ -48,12 +45,12 @@ impl Model<f16, Ix4> for Mobilenet {
     }
 
     fn postprocess(output: ort::session::SessionOutputs) -> Self::Output {
-        let output: Tensor<f16> = output.into_iter().next().unwrap().1.downcast().unwrap();
+        let output: Tensor<f32> = output.into_iter().next().unwrap().1.downcast().unwrap();
         let output = output
             .extract_array()
             .to_shape((512, 512))
             .unwrap()
-            .mapv(|v| (v.to_f32() * 255.0) as u8);
+            .mapv(|v| (v * 255.0) as u8);
         output
     }
     fn session(&mut self) -> &mut Session {

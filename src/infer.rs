@@ -118,13 +118,21 @@ mod test {
     #[test]
     fn test_mobilenet() {
         use crate::model::{Model, mobilenet::Mobilenet};
-        use image::{ImageBuffer, Luma};
+        use image::{ImageBuffer, Luma, Rgba};
+        use imageproc::{
+            contours::{BorderType, find_contours},
+            contrast::{ThresholdType, otsu_level, threshold_mut},
+            distance_transform::Norm,
+            drawing::draw_antialiased_polygon_mut,
+            morphology::open_mut,
+            pixelops::interpolate,
+        };
 
-        let model_data = std::fs::read("./model_RS.onnx").unwrap();
+        let model_data = std::fs::read("./unet_fp32.onnx").unwrap();
         let mut model = Mobilenet::new(&model_data).unwrap();
         let img = image::open("./rooftop.png").unwrap();
         let inference = model.run(img.clone()).unwrap();
-        let mask: ImageBuffer<Luma<u8>, _> = ImageBuffer::from_raw(
+        let mut mask: ImageBuffer<Luma<u8>, _> = ImageBuffer::from_raw(
             Mobilenet::INPUT_SHAPE[2] as u32,
             Mobilenet::INPUT_SHAPE[1] as u32,
             inference
@@ -133,15 +141,29 @@ mod test {
                 .to_vec(),
         )
         .unwrap();
-        // let mask: ImageBuffer<Rgb<u8>, Vec<_>> = mask.convert();
-        // let mut img = resize_padded(
-        //     img.into(),
-        //     (
-        //         Mobilenet::INPUT_SHAPE[2] as u32,
-        //         Mobilenet::INPUT_SHAPE[1] as u32,
-        //     ),
-        // );
-        // imageops::overlay(&mut img, &mask, 0, 0);
-        mask.save("roof_out.png").unwrap();
+        mask.save("./roof_out_raw.png").unwrap();
+        // let otsu_level = otsu_level(&mask);
+        threshold_mut(&mut mask, 15, ThresholdType::Binary);
+        mask.save("./roof_out_thresh.png").unwrap();
+        open_mut(&mut mask, Norm::L1, 1);
+        mask.save("./roof_out_open.png").unwrap();
+        let contours = find_contours::<i32>(&mask);
+        let mut img = img;
+        for contour in &contours {
+            draw_antialiased_polygon_mut(
+                &mut img,
+                &contour.points,
+                Rgba([255, 0, 0, 255]),
+                interpolate,
+            );
+        }
+        img.save(format!(
+            "./roof_out_{}_poly.png",
+            contours
+                .iter()
+                .filter(|c| c.border_type == BorderType::Outer)
+                .count()
+        ))
+        .unwrap();
     }
 }

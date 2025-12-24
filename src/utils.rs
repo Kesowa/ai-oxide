@@ -1,4 +1,4 @@
-use s3::{creds::Credentials, error::S3Error, Bucket, Region};
+use s3::{Bucket, Region, creds::Credentials, error::S3Error};
 use serde::Deserialize;
 use tokio_stream::StreamExt;
 use tokio_util::io::StreamReader;
@@ -98,7 +98,7 @@ pub trait S3Object: Send + Sync {
     fn reader(
         &self,
     ) -> impl std::future::Future<Output = Result<impl tokio::io::AsyncRead + Unpin, std::io::Error>>
-           + Send;
+    + Send;
 }
 
 pub trait S3Dir: Send + Sync {
