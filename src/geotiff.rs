@@ -1,10 +1,14 @@
+use std::collections::HashMap;
+use std::path::Path;
+
+use gdal::Dataset;
+use gdal::raster::RasterBand;
 use gdal::spatial_ref::CoordTransform;
 use gdal::spatial_ref::SpatialRef;
-use gdal::{Dataset, Metadata, raster::RasterBand};
-use ndarray::{Array3, Axis, s};
-use std::{collections::HashMap, path::Path};
-
-use crate::model::utils::ndarray3_to_image;
+use ndarray::Array3;
+use ndarray::Axis;
+use ndarray::s;
+use thiserror::Error;
 
 /* Set the following ENV Vars
 export GDAL_DISABLE_READDIR_ON_OPEN=EMPTY_DIR
@@ -49,69 +53,107 @@ pub fn pixel_to_geocoord(
     Ok((x[0], y[0])) // lon, lat
 }
 
-pub fn example() {
-    // let path = Path::new("/vsis3/aru/raster/Ortho_25cm.tif");
-    let path = Path::new("./ortho.tiff");
-    let dataset = Dataset::open(path).unwrap();
-    println!(
-        "dataset metadata: {:#?}",
-        dataset.metadata().collect::<Vec<_>>()
-    );
-    println!("dataset bands: {:?}", dataset.raster_count());
-    println!("dataset size: {:?}", dataset.raster_size());
-    println!("dataset projection: {:?}", dataset.projection());
-    let band_map = HashMap::<String, RasterBand>::from_iter(
-        dataset
-            .rasterbands()
-            .filter_map(|r| r.ok())
-            .map(|r| (r.color_interpretation().name(), r)),
-    );
-    println!("{:?}", band_map.keys());
-    let bands = [
-        band_map.get("Red").unwrap(),
-        band_map.get("Green").unwrap(),
-        band_map.get("Blue").unwrap(),
-        // band_map.get("Alpha").unwrap(),
-    ];
-    // Final block size that will be generated for inferencing
-    let block_size = (512, 512);
-    // Inverse of the step size ratio. 1 = no overlap. 2 = 50% overlap. 3 = 67% overlap. etc.
-    let overlap = 1;
-    let raster_size = bands[0].size();
-    for x in (0..raster_size.0).step_by(block_size.0 / overlap) {
-        for y in (0..raster_size.1).step_by(block_size.1 / overlap) {
-            // Boundary condition
-            // If the raster size is not a multiple of the block size, it will not be able to fill an entire block at the extents (the rightmost and bottommost edges).
-            // In that case, read the incomplete window and overlay it onto the proper block sized channel, snapped to the top-left corner
-            let window_size = (
-                block_size.0.min(raster_size.0 - x),
-                block_size.1.min(raster_size.1 - y),
-            );
-            let offset = (x as isize, y as isize);
+pub struct Ortho {
+    dataset: Dataset,
+    block_size: (usize, usize),
+    overlap: usize,
+}
 
-            let mut img_arr: Array3<u8> = Array3::zeros((bands.len(), block_size.0, block_size.1));
-
-            for (index, band) in bands.iter().enumerate() {
-                let window = band
-                    .read_as::<u8>(offset, window_size, window_size, None)
-                    .unwrap()
-                    .to_array()
-                    .unwrap();
-                let mut channel = img_arr.index_axis_mut(Axis(0), index);
-                // Crop the channel to align with the window size at the top-left corner
-                let mut view = channel.slice_mut(s![0..window_size.1, 0..window_size.0]);
-                view += &window;
+impl Ortho {
+    const CHANNELS: [&'static str; 3] = ["Red", "Green", "Blue"];
+    pub fn new(path: &Path, block_size: (u32, u32), overlap: u32) -> Result<Self, GeoError> {
+        let dataset = Dataset::open(path)?;
+        let band_map = HashMap::<String, RasterBand>::from_iter(
+            dataset
+                .rasterbands()
+                .filter_map(|r| r.ok())
+                .map(|r| (r.color_interpretation().name(), r)),
+        );
+        for channel in Self::CHANNELS {
+            if band_map.get(channel).is_none() {
+                return Err(GeoError::Band(channel));
             }
-
-            // Convert 3D array into pixel-interleaved linear array
-            let img = ndarray3_to_image(img_arr);
-            img.save(format!("output/{x}.{y}.png")).ok();
-            return;
         }
+        Ok(Self {
+            dataset,
+            block_size: (block_size.0 as usize, block_size.1 as usize),
+            overlap: overlap as usize,
+        })
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = Result<((usize, usize), Array3<u8>), GeoError>> {
+        let mut band_map = HashMap::<String, RasterBand>::from_iter(
+            self.dataset
+                .rasterbands()
+                .filter_map(|r| r.ok())
+                .map(|r| (r.color_interpretation().name(), r)),
+        );
+        let bands = Self::CHANNELS.map(|ch| band_map.remove(ch).unwrap());
+        let block_size = self.block_size;
+        let overlap = self.overlap;
+        let raster_size = bands[0].size();
+        let my_iter = (0..raster_size.0)
+            .step_by(block_size.0 / overlap)
+            .flat_map(move |x| {
+                (0..raster_size.1)
+                    .step_by(block_size.1 / overlap)
+                    .map(move |y| (x, y))
+            });
+        let my_iter =
+            my_iter.map(move |(x, y)| img_from_bands(x, y, &bands, block_size, raster_size));
+        my_iter
     }
 }
 
-#[test]
-fn test_example() {
-    let _ = example();
+fn img_from_bands(
+    x: usize,
+    y: usize,
+    bands: &[RasterBand<'_>; 3],
+    block_size: (usize, usize),
+    raster_size: (usize, usize),
+) -> Result<((usize, usize), Array3<u8>), GeoError> {
+    let window_size = (
+        block_size.0.min(raster_size.0 - x),
+        block_size.1.min(raster_size.1 - y),
+    );
+    let offset = (x as isize, y as isize);
+
+    let mut img_arr: Array3<u8> = Array3::zeros((bands.len(), block_size.0, block_size.1));
+
+    for (index, band) in bands.iter().enumerate() {
+        let window = band
+            .read_as::<u8>(offset, window_size, window_size, None)?
+            .to_array()?;
+        let mut channel = img_arr.index_axis_mut(Axis(0), index);
+        // Crop the channel to align with the window size at the top-left corner
+        let mut view = channel.slice_mut(s![0..window_size.1, 0..window_size.0]);
+        view += &window;
+    }
+    Ok(((x, y), img_arr))
+}
+
+#[derive(Error, Debug)]
+pub enum GeoError {
+    #[error("gdal error")]
+    GDAL(#[from] gdal::errors::GdalError),
+    #[error("band not found in tif: {0}")]
+    Band(&'static str),
+}
+
+#[cfg(test)]
+mod test {
+    use std::path::Path;
+
+    use crate::{geotiff::Ortho, model::utils::ndarray3_to_image};
+    #[test]
+    fn test_geotiff_ortho() {
+        let path = Path::new("./ortho.tiff");
+        let ortho = Ortho::new(path, (512, 512), 1).unwrap();
+        for block in ortho.iter() {
+            let ((x, y), img_arr) = block.unwrap();
+
+            let img = ndarray3_to_image(img_arr);
+            img.save(format!("output/{x}.{y}.png")).ok();
+        }
+    }
 }

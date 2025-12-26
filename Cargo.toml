@@ -46,3 +46,4 @@ imageproc = "0.25.0"
 geo = "0.32.0"
 half = "2.7.1"
 num-traits = "0.2.19"
+uuid = { version = "1.19.0", features = ["v4"] }

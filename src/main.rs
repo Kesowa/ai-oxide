@@ -1,23 +1,23 @@
 use ai_oxide::{
-    decompress,
+    InferError, InferType, inference,
     telemetry::{get_subscriber, init_subscriber},
-    utils::{create_bucket, Dir, Object, S3},
-    ZipError,
+    utils::{Object, S3, create_bucket},
 };
 use lapin::{
+    BasicProperties, Connection, ConnectionProperties,
     options::{
         BasicAckOptions, BasicConsumeOptions, BasicPublishOptions, BasicQosOptions,
         QueueDeclareOptions,
     },
     types::FieldTable,
-    BasicProperties, Connection, ConnectionProperties,
 };
 use serde::{Deserialize, Serialize};
 use tokio_stream::StreamExt;
 use tracing::{error, info, instrument};
+use uuid::Uuid;
 
-const REQ_QUEUE: &str = "file.decompress.req";
-const RES_QUEUE: &str = "file.decompress.res";
+const REQ_QUEUE: &str = "rooftop.infer.req";
+const RES_QUEUE: &str = "rooftop.infer.res";
 const TAG: &str = "";
 
 #[tokio::main]
@@ -27,7 +27,7 @@ async fn main() {
     }
 
     let subscriber = get_subscriber(
-        "zip-decompress".into(),
+        "ai-infer".into(),
         std::env::var("RUST_LOG").unwrap(),
         std::io::stdout,
     );
@@ -104,7 +104,7 @@ async fn main() {
                 continue;
             }
         };
-        let req = match serde_json::from_slice::<TranscodeRequest>(&delivery.data) {
+        let req = match serde_json::from_slice::<InferenceRequest>(&delivery.data) {
             Ok(r) => r,
             Err(err) => {
                 error!("unable to decode message: {err:?}");
@@ -114,12 +114,12 @@ async fn main() {
         let s3 = s3.clone();
         info!("started zip decompression!");
         info!("{req:?}");
-        let zip = decompress_zip(s3, req.file).await;
+        let inference = run_inference(s3, req.file, req.infer).await;
         info!("zip decompressed successfully!");
-        let res = TranscodeResponse {
+        let res = InferenceResponse {
             metadata: req.metadata,
-            success: zip.is_ok(),
-            zip: zip.unwrap_or_default(),
+            success: inference.is_ok(),
+            inference: inference.unwrap_or_default(),
         };
         let res = match serde_json::to_vec(&res) {
             Ok(r) => r,
@@ -157,35 +157,37 @@ async fn main() {
 }
 
 #[derive(Deserialize, Debug)]
-struct TranscodeRequest {
+struct InferenceRequest {
     file: String,
+    infer: InferType,
     metadata: AruMetadata,
 }
 
 #[derive(Serialize)]
-struct TranscodeResponse {
+struct InferenceResponse {
     metadata: AruMetadata,
-    zip: Zip,
+    inference: Inference,
     success: bool,
 }
 
 type AruMetadata = serde_json::Value;
 
 #[derive(Serialize, Default)]
-struct Zip {
-    zip: Option<String>,
+struct Inference {
+    inference: Option<String>,
 }
 
 #[instrument(skip(s3))]
-async fn decompress_zip(s3: S3, key: String) -> Result<Zip, ZipError> {
+async fn run_inference(s3: S3, key: String, infer: InferType) -> Result<Inference, InferError> {
     let bucket = create_bucket(s3)?;
     let dir_key = key
-        .strip_suffix(".zip")
-        .ok_or(ZipError::InvalidRequest("invalid file extension".into()))?;
-    let dir = Dir::new(*bucket.clone(), dir_key);
-    let zip = Object::new(*bucket, &key);
-    decompress(zip, dir).await?;
-    Ok(Zip {
-        zip: Some(dir_key.into()),
+        .strip_suffix(".tif")
+        .ok_or(InferError::InvalidRequest("invalid file extension".into()))?;
+    let in_file = Object::new(*bucket.clone(), &key);
+    let out_file_key = format!("vector/{}.{}", Uuid::new_v4(), infer.output_ext());
+    let out_file = Object::new(*bucket, &out_file_key);
+    inference(in_file, out_file, infer).await?;
+    Ok(Inference {
+        inference: Some(dir_key.into()),
     })
 }
