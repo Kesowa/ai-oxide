@@ -1,4 +1,29 @@
+# Rust build output
 /target
-*.zip
+**/*.rs.bk
+
+# Test harness
 /test/node_modules
 /test2
+
+# Archives and model weights — do not commit these
+*.zip
+*.onnx
+*.pt
+*.pth
+
+# Local environment
+.env
+.env.local
+*.env
+
+# Editors
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+
+# Analysis output
+report/
